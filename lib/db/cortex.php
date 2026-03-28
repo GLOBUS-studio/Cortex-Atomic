@@ -349,7 +349,8 @@ class Cortex extends Cursor {
 					if (is_array($relConf = $field['has-many'])) {
 						$rel = $relConf[0]::resolveConfiguration();
 						// check if foreign conf matches m:m
-						if (array_key_exists($relConf[1],$rel['fieldConf'])
+						if (!is_null($relConf[1])
+							&& array_key_exists($relConf[1],$rel['fieldConf'])
 							&& !is_null($rel['fieldConf'][$relConf[1]])
 							&& $relConf['hasRel'] == 'has-many') {
 							// compute mm table name
@@ -439,7 +440,7 @@ class Cortex extends Cursor {
 					continue;
 				$rel = $relConf[0]::resolveConfiguration();
 				// check if foreign conf matches m:m
-				if (array_key_exists($relConf[1],$rel['fieldConf']) && !is_null($relConf[1])
+				if (!is_null($relConf[1]) && array_key_exists($relConf[1],$rel['fieldConf'])
 					&& key($rel['fieldConf'][$relConf[1]]) == 'has-many') {
 					// compute mm table name
 					$deletable[] = $relConf[2] ?? static::getMMTableName(
@@ -690,9 +691,9 @@ class Cortex extends Cursor {
 		if ($this->dbsType == 'sql' && !$count) {
 			$m_refl=new \ReflectionObject($this->mapper);
 			$m_ad_prop=$m_refl->getProperty('adhoc');
-			$m_ad_prop->setAccessible(true);
+			if (PHP_VERSION_ID < 80100) $m_ad_prop->setAccessible(true);
 			$m_refl_adhoc=$m_ad_prop->getValue($this->mapper);
-			$m_ad_prop->setAccessible(false);
+			if (PHP_VERSION_ID < 80100)	$m_ad_prop->setAccessible(false);
 			unset($m_ad_prop,$m_refl);
 		}
 		// sorting by relation helper: @field.field
