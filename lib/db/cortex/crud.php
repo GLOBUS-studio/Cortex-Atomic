@@ -380,19 +380,30 @@ trait CrudTrait {
 		if (!$filter) {
 			if ($this->emit('beforeerase')===false)
 				return false;
-			if ($this->fieldConf) {
-				// clear all m:m references
-				foreach($this->fieldConf as $key => $conf)
-					if (isset($conf['has-many']) &&
-						$conf['has-many']['hasRel']=='has-many') {
-						$rel = $this->getRelInstance(null, [
-							'db'=>$this->db,
-							'table'=>$this->mmTable($conf['has-many'],$key)]);
-						$id = $this->get($conf['has-many']['relPK'],true);
-						$rel->erase([$conf['has-many']['relField'].' = ?', $id]);
-					}
+			$needsTx = $this->dbsType == 'sql' && !$this->db->trans();
+			if ($needsTx)
+				$this->db->begin();
+			try {
+				if ($this->fieldConf) {
+					// clear all m:m references
+					foreach($this->fieldConf as $key => $conf)
+						if (isset($conf['has-many']) &&
+							$conf['has-many']['hasRel']=='has-many') {
+							$rel = $this->getRelInstance(null, [
+								'db'=>$this->db,
+								'table'=>$this->mmTable($conf['has-many'],$key)]);
+							$id = $this->get($conf['has-many']['relPK'],true);
+							$rel->erase([$conf['has-many']['relField'].' = ?', $id]);
+						}
+				}
+				$this->mapper->erase();
+				if ($needsTx)
+					$this->db->commit();
+			} catch (\Exception $e) {
+				if ($needsTx)
+					$this->db->rollback();
+				throw $e;
 			}
-			$this->mapper->erase();
 			$this->emit('aftererase');
 		} else
 			$this->mapper->erase($filter);
@@ -533,12 +544,23 @@ trait CrudTrait {
 		$this->_beforesave();
 		if ($this->emit('beforeinsert')===false)
 			return false;
-		$res = $this->mapper->insert();
-		if (is_array($res))
-			$res = $this->mapper;
-		if (is_object($res))
-			$res = $this->factory($res);
-		$this->_aftersave();
+		$needsTx = $this->dbsType == 'sql' && !$this->db->trans();
+		if ($needsTx)
+			$this->db->begin();
+		try {
+			$res = $this->mapper->insert();
+			if (is_array($res))
+				$res = $this->mapper;
+			if (is_object($res))
+				$res = $this->factory($res);
+			$this->_aftersave();
+			if ($needsTx)
+				$this->db->commit();
+		} catch (\Exception $e) {
+			if ($needsTx)
+				$this->db->rollback();
+			throw $e;
+		}
 		$this->emit('afterinsert');
 		return is_int($res) ? $this : $res;
 	}
@@ -551,12 +573,23 @@ trait CrudTrait {
 		$this->_beforesave();
 		if ($this->emit('beforeupdate')===false)
 			return false;
-		$res = $this->mapper->update();
-		if (is_array($res))
-			$res = $this->mapper;
-		if (is_object($res))
-			$res = $this->factory($res);
-		$this->_aftersave();
+		$needsTx = $this->dbsType == 'sql' && !$this->db->trans();
+		if ($needsTx)
+			$this->db->begin();
+		try {
+			$res = $this->mapper->update();
+			if (is_array($res))
+				$res = $this->mapper;
+			if (is_object($res))
+				$res = $this->factory($res);
+			$this->_aftersave();
+			if ($needsTx)
+				$this->db->commit();
+		} catch (\Exception $e) {
+			if ($needsTx)
+				$this->db->rollback();
+			throw $e;
+		}
 		$this->emit('afterupdate');
 		return is_int($res) ? $this : $res;
 	}

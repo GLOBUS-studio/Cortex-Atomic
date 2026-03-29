@@ -3,6 +3,31 @@ https://github.com/GLOBUS-studio/Cortex-Atomic
 Part of Atomic Framework: https://github.com/MADEVAL/Atomic-Framework
 Based on Cortex by ikkez (Christian Knuth) for Fat-Free Framework.
 
+1.8.2-atomic (29.03.2026)
+
+  [Transactions]
+*	insert(), update(), erase() now wrapped in implicit SQL transactions
+	- ensures atomicity of mapper operation + m:m pivot table updates (_aftersave)
+	- erase() wraps m:m reference cleanup + mapper->erase() in single transaction
+	- automatic rollback on any exception during transactional block
+	- exceptions are re-thrown after rollback for caller handling
+*	transaction nesting support - respects user-managed outer transactions
+	- checks $db->trans() before begin() to avoid double-begin
+	- if outer transaction is active, Cortex skips begin/commit/rollback
+	- allows multiple Cortex operations in a single user-controlled transaction
+*	non-SQL engines (Jig, Mongo) are unaffected - transaction logic only activates
+	when dbsType === 'sql'
+
+  [Test Suite - 269 Tests]
+*	added Test_Transaction class (22 tests) covering:
+	- implicit transaction commit on insert/update/erase
+	- rollback on _aftersave exception (insert and update paths)
+	- user-managed outer transaction nesting (no double-begin)
+	- user rollback reverts nested Cortex saves
+	- multiple saves in single outer transaction
+	- erase rollback on exception
+	- beforeinsert event returning false prevents transaction start
+
 1.8.1-atomic (29.03.2026)
 
   [Security]

@@ -75,6 +75,13 @@ foreach ($dbs as $type => $db) {
     $results = array_merge($results, (array)$test->run($db, $type));
 }
 
+// Test Transactions (implicit tx, rollback, nesting, user-managed)
+foreach ($dbs as $type => $db) {
+    $f3->set('DB', $db);
+    $test = new \Test_Transaction();
+    $results = array_merge($results, (array)$test->run($db, $type));
+}
+
 // Output results
 echo str_repeat('=', 70).PHP_EOL;
 echo "  CORTEX-ATOMIC TEST RESULTS".PHP_EOL;
