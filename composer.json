@@ -1,13 +1,14 @@
 {
-    "name": "ikkez/f3-cortex",
-    "description": "A multi-engine ORM / ODM for the PHP Fat-Free Framework",
-    "keywords": ["F3","fatfree","sql","ORM", "Mongo"],
-    "homepage": "https://github.com/ikkez/f3-cortex",
+    "name": "globus-studio/cortex-atomic",
+    "description": "A multi-engine ORM / ODM for the PHP Fat-Free Framework (modified) and Atomic Framework",
+    "keywords": ["F3","fatfree","sql","ORM", "Atomic"],
+    "homepage": "https://github.com/GLOBUS-studio/Cortex-Atomic",
     "license": "GPL-3.0",
     "autoload": {
 		"classmap": ["lib/"]
     },
 	"require": {
+		"php": ">=8.0",
 		"ikkez/f3-schema-builder": "2.*"
 	}
 }

@@ -1,7 +1,9 @@
 <?php
 
 /**
- *  Cortex - the flexible data mapper for the PHP Fat-Free Framework
+ *  Cortex-Atomic - a multi-engine ORM / ODM for Atomic Framework
+ *  Based on Cortex by ikkez for PHP Fat-Free Framework
+ *  Adapted for modern PHP (8.0+) and Atomic Framework
  *
  *  The contents of this file are subject to the terms of the GNU General
  *  Public License Version 3.0. You may not use this file except in
@@ -17,9 +19,12 @@
  *  Christian Knuth <mail@ikkez.de>
  *  https://github.com/ikkez/F3-Sugar/
  *
+ *  Modified for Atomic Framework by GLOBUS studio
+ *  https://github.com/GLOBUS-studio/Cortex-Atomic
+ *
  *  @package DB
- *  @version 1.7.8
- *  @date 25.02.2025
+ *  @version 1.8.0-atomic
+ *  @date 29.03.2026
  *  @since 22.01.2013
  */
 
@@ -182,7 +187,7 @@ class Cortex extends Cursor {
 		if ($fields)
 			// collect & set restricted fields for related mappers
 			foreach($fields as $i=>$val)
-				if(is_int(strpos($val,'.'))) {
+				if(str_contains($val,'.')) {
 					list($key, $relField) = explode('.',$val,2);
 					$this->relWhitelist[$key][(int)$exclude][] = $relField;
 					unset($fields[$i]);
@@ -691,14 +696,13 @@ class Cortex extends Cursor {
 		if ($this->dbsType == 'sql' && !$count) {
 			$m_refl=new \ReflectionObject($this->mapper);
 			$m_ad_prop=$m_refl->getProperty('adhoc');
-			if (PHP_VERSION_ID < 80100) $m_ad_prop->setAccessible(true);
+			$m_ad_prop->setAccessible(true);
 			$m_refl_adhoc=$m_ad_prop->getValue($this->mapper);
-			if (PHP_VERSION_ID < 80100)	$m_ad_prop->setAccessible(false);
 			unset($m_ad_prop,$m_refl);
 		}
 		// sorting by relation helper: @field.field
 		if ($this->dbsType == 'sql' && !empty($options['order'])
-			&& strpos($options['order'], '@') !== FALSE) {
+			&& str_contains($options['order'], '@')) {
 			$options['order']=preg_replace_callback(
 				'/(?:^|[\h,])+(@([\w\-\d]+)\.)/i', function($match) {
 					if (isset($this->fieldConf[ $match[2] ])) {
@@ -715,7 +719,7 @@ class Cortex extends Cursor {
 		if ($this->hasCond) {
 			foreach($this->hasCond as $key => $hasCond) {
 				$addToFilter = null;
-				if ($deep = is_int(strpos($key,'.'))) {
+				if ($deep = str_contains($key,'.')) {
 					$key = rtrim($key,'.');
 					$hasCond = [null,null];
 				}
@@ -961,7 +965,7 @@ class Cortex extends Cursor {
 	public function has($key, $filter, $options = null) {
 		if (is_string($filter))
 			$filter=[$filter];
-		if (is_int(strpos($key,'.'))) {
+		if (str_contains($key,'.')) {
 			list($key,$fkey) = explode('.',$key,2);
 			if (!isset($this->hasCond[$key.'.']))
 				$this->hasCond[$key.'.'] = [];
@@ -1163,7 +1167,7 @@ class Cortex extends Cursor {
 	 * @return $this
 	 */
 	public function filter($key, $filter=null, $option=null) {
-		if (is_int(strpos($key,'.'))) {
+		if (str_contains($key,'.')) {
 			list($key,$fkey) = explode('.',$key,2);
 			if (!isset($this->relFilter[$key.'.']))
 				$this->relFilter[$key.'.'] = [];
@@ -1397,7 +1401,7 @@ class Cortex extends Cursor {
 	 * @param $key
 	 */
 	public function countRel($key, $alias=null, $filter=null, $option=null) {
-		if (strpos($key,'.')!==FALSE) {
+		if (str_contains($key,'.')) {
 			list($relM,$relF) = explode('.',$key,2);
 			$this->rel($relM)->countRel($relF,$alias,$filter,$option);
 			return;
@@ -2174,7 +2178,7 @@ class Cortex extends Cursor {
 			// collect field mask for relations
 			foreach($rel_depths as $i=>$val)
 				if (is_int($i)) {
-					if (is_int(strpos($val,'.'))) {
+					if (str_contains($val,'.')) {
 						list($key, $relMask) = explode('.',$val,2);
 						$relMasks[$key][] = $relMask;
 					} else
@@ -2720,7 +2724,7 @@ class CortexQueryParser extends \Prefab {
 				break;
 			case 'mongo':
 				$parts = $this->splitLogical($where);
-				if (is_int(strpos($where, ':')))
+				if (str_contains($where, ':'))
 					list($parts, $args) = $this->convertNamedParams($parts, $args);
 				foreach ($parts as &$part) {
 					$part = $this->_mongo_parse_relational_op($part, $args, $db, $fieldConf);
@@ -2737,7 +2741,7 @@ class CortexQueryParser extends \Prefab {
 					$where = preg_replace('/\s+like\s+/i', ' ILIKE ', $where);
 				$parts = $this->splitLogical($where);
 				// ensure positional bind params
-				if (is_int(strpos($where, ':')))
+				if (str_contains($where, ':'))
 					list($parts, $args) = $this->convertNamedParams($parts, $args);
 				$ncond = [];
 				foreach ($parts as &$part) {
@@ -2749,7 +2753,7 @@ class CortexQueryParser extends \Prefab {
 					} elseif ($argCount === 1) {
 						$val = array_shift($args);
 						// enhanced IN operator args expansion
-						if (is_int($pos = strpos($part, ' IN ?'))) {
+						if (($pos = strpos($part, ' IN ?')) !== false) {
 							if ($val instanceof CortexCollection)
 								$val = $val->getAll('_id',TRUE);
 							if (!is_array($val) || empty($val))
@@ -2809,7 +2813,7 @@ class CortexQueryParser extends \Prefab {
 						$match[0]));
 				$part = str_replace($match[0], '?', $part);
 				$params[] = $args[$match[0]];
-			} elseif (is_int(strpos($part, '?')))
+			} elseif (str_contains($part, '?'))
 				$params[] = $args[$pos++];
 			unset($part);
 		}
@@ -2871,7 +2875,7 @@ class CortexQueryParser extends \Prefab {
 	 */
 	protected function _jig_parse_filter($where, $args) {
 		$parts = $this->splitLogical($where);
-		if (is_int(strpos($where, ':')))
+		if (str_contains($where, ':'))
 			list($parts, $args) = $this->convertNamedParams($parts, $args);
 		$ncond = [];
 		foreach ($parts as &$part) {
@@ -2880,21 +2884,20 @@ class CortexQueryParser extends \Prefab {
 			// prefix field names
 			$part = preg_replace('/([a-z_-]+(?:[\w-]+))/i', '@$1', $part, -1, $count);
 			// value comparison
-			if (is_int(strpos($part, '?'))) {
+			if (str_contains($part, '?')) {
 				$val = array_shift($args);
 				preg_match('/(@\w+)/i', $part, $match);
 				$skipVal=false;
 				// find like operator
-				if (is_int(strpos($upart = strtoupper($part), ' @LIKE '))) {
-					if ($not = is_int($npos = strpos($upart, '@NOT')))
-						$pos = $npos;
+				if (str_contains($upart = strtoupper($part), ' @LIKE ')) {
+					$not = str_contains($upart, '@NOT');
 					$val = '/'.$this->_likeValueToRegEx($val).'/iu';
 					$part = ($not ? '!' : '').'preg_match(?,'.$match[0].')';
 				} // find IN operator
-				elseif (is_int($pos = strpos($upart, ' @IN '))) {
+				elseif (($pos = strpos($upart, ' @IN ')) !== false) {
 					if ($val instanceof CortexCollection)
 						$val = $val->getAll('_id',TRUE);
-					if ($not = is_int($npos = strpos($upart, '@NOT')))
+					if ($not = (($npos = strpos($upart, '@NOT')) !== false))
 						$pos = $npos;
 					$part = ($not ? '!' : '').'in_array('.substr($part, 0, $pos).
 						',array(\''.implode('\',\'', $val).'\'))';
@@ -2992,14 +2995,14 @@ class CortexQueryParser extends \Prefab {
 		if (is_null($part))
 			return $part;
 		if (preg_match('/\<\=|\>\=|\<\>|\<|\>|\!\=|\=\=|\=|like|not like|in|not in/i', $part, $match)) {
-			$var = is_int(strpos($part, '?')) ? array_shift($args) : null;
+			$var = str_contains($part, '?') ? array_shift($args) : null;
 			$exp = explode($match[0], $part);
 			$key = trim($exp[0]);
 			// unbound value
 			if (is_numeric($exp[1]))
 				$var = $exp[1];
 			// field comparison
-			elseif (!is_int(strpos($exp[1], '?')))
+			elseif (!str_contains($exp[1], '?'))
 				return ['$where' => 'this.'.$key.' '.$match[0].' this.'.trim($exp[1])];
 			$upart = strtoupper($match[0]);
 			// MongoID shorthand
@@ -3103,7 +3106,7 @@ class CortexQueryParser extends \Prefab {
 			case 'sql':
 				$char=substr($db->quotekey(''),0,1);
 				if (array_key_exists('order', $options) &&
-					FALSE===strpos($options['order'],$char))
+					!str_contains($options['order'],$char))
 					$options['order']=preg_replace_callback(
 						'/(\w+\h?\(|'. // skip function names
 						'\b(?!\w+)(?:\s+\w+)+|' . // skip field args

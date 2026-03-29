@@ -2057,23 +2057,7 @@ This removes a part from the collection.
 
 If you find any issues or bugs, please file a [new Issue](https://github.com/ikkez/F3-Sugar/issues) on github or write a mail. Thanks.
 
-## Roadmap
-
-If you have any ideas, suggestions or improvements, feel free to add an issue for this on github.
-
-
-Cortex currently only reflects to the most common use cases. If you need more extensive control over your queries or the DB, you may consider to use the underlying mapper or DB directly. This could be done in custom methods or field preprocessors in your Model classes.
-
-Anyways, I hope you find this useful. If you like this plugin, why not make a donation?
-
-[![buy me a Beer](https://ikkez.de/linked/Beer/bdb_small_single.png)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=44UHPNUCVP7QG)
-
-If you like to see Cortex in action, have a look at [fabulog](https://github.com/ikkez/fabulog "the new fabulous blog-ware").
-
 License
 -
 
 GPLv3
-  
-
-    
