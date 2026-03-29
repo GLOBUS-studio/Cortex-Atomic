@@ -3,6 +3,43 @@ https://github.com/GLOBUS-studio/Cortex-Atomic
 Part of Atomic Framework: https://github.com/MADEVAL/Atomic-Framework
 Based on Cortex by ikkez (Christian Knuth) for Fat-Free Framework.
 
+1.8.6-atomic (29.03.2026)
+
+  [Bug Fixes]
+*	fixed sql_quoteCondition() and sql_prependTableToFields() reserved word handling
+	- extended reserved word regex to cover all SQL keywords: IS, NULL, BETWEEN,
+	  EXISTS, TRUE, FALSE, ASC, DESC, HAVING, SELECT, FROM, WHERE, AS, ON, JOIN,
+	  LEFT, RIGHT, INNER, OUTER, CASE, WHEN, THEN, ELSE, END, CAST, DISTINCT,
+	  LIMIT, OFFSET, GROUP, ORDER, BY
+	- sql_prependTableToFields() additionally excludes aggregate functions:
+	  COUNT, SUM, AVG, MIN, MAX
+	- prevents incorrect backtick-quoting and table-prefix prepending of SQL keywords
+	  in filter conditions (e.g. "field IS NOT NULL", "id BETWEEN ? AND ?")
+*	fixed orHas() condition overwrite bug
+	- multiple orHas() calls on the same relation key now properly merge with OR logic
+	- uses mergeFilter('or') instead of overwriting hasCond[$key]
+	- e.g. $model->has('author','name = ?','foo')->orHas('author','name = ?','bar')
+	  now correctly produces (name = 'foo') OR (name = 'bar')
+*	fixed has() on belongs-to-many relations
+	- added missing 'belongs-to-many' case in filteredFind() switch
+	- enables has-filter on m:m relations with JSON-stored foreign IDs
+	- scans JSON field arrays for matching IDs from filtered related records
+
+  [Test Suite - 484 Tests]
+*	added Test_Hardened class (118 tests) - stress tests and parser unit tests:
+	- findByRawSQL correctness, erase cascade integrity, m:m pivot consistency
+	- UTF-8 field names, deep cast nesting, virtual field isolation
+	- copyfrom whitelisting, onset/onget hooks, countRel accuracy
+	- parser reserved word probes (IS NOT NULL, BETWEEN on short field names)
+	- orHas() OR-merge probe, concurrent update detection, belongs-to-many has()
+	- large IN clause handling, getTable() API verification
+	- sql_quoteCondition() unit tests: IS NOT NULL, BETWEEN, TRUE/FALSE, EXISTS,
+	  CASE/WHEN/THEN/ELSE/END, LEFT/JOIN/ON/AS, ASC/LIMIT/OFFSET,
+	  GROUP/ORDER/BY/DESC, DISTINCT, plus field quoting verification
+	- sql_prependTableToFields() unit tests: same keywords plus COUNT/SUM/AVG/MIN/MAX,
+	  plus table prefix verification on regular fields
+	- integration tests: has() with IS NOT NULL and BETWEEN end-to-end
+
 1.8.5-atomic (29.03.2026)
 
   [Bug Fixes]
