@@ -486,6 +486,43 @@ class Test_Collection {
 			$type.': cleared() returns false when field not cleared'
 		);
 
+		// ========================================================================
+		// WeakReference: Collection↔Model circular reference is broken
+		// ========================================================================
+		$a = new \AuthorModel();
+		$a->name = 'WeakRefTest';
+		$a->save();
+		$collection = $a->find(['name = ?', 'WeakRefTest']);
+		$weakCol = \WeakReference::create($collection);
+		// extract one model from collection
+		$model = $collection[0];
+		// verify smart loading still works while collection is alive
+		$cx = (new \ReflectionMethod($model, 'getCollection'))->invoke($model);
+		$test->expect(
+			$cx instanceof \DB\CortexCollection,
+			$type.': getCollection() returns live collection via WeakReference'
+		);
+		// drop the only strong reference to collection
+		unset($collection, $cx);
+		// collection should be GC'd since model only holds a WeakReference
+		$test->expect(
+			$weakCol->get() === null,
+			$type.': Collection is GC-able when external ref dropped (no circular leak)'
+		);
+		// model still alive and functional after collection is gone
+		$test->expect(
+			$model->name === 'WeakRefTest' && !$model->dry(),
+			$type.': Model remains functional after collection GC'
+		);
+		// getCollection() returns false since collection was collected
+		$cx2 = (new \ReflectionMethod($model, 'getCollection'))->invoke($model);
+		$test->expect(
+			$cx2 === false,
+			$type.': getCollection() returns false after collection GC'
+		);
+		// cleanup
+		$model->erase();
+
 		///////////////////////////////////
 		return $test->results();
 	}

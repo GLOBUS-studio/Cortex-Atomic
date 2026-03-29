@@ -199,7 +199,7 @@ class Cortex extends Cursor {
 	 * @param CortexCollection $cx
 	 */
 	public function addToCollection($cx) {
-		$this->collection = $cx;
+		$this->collection = \WeakReference::create($cx);
 	}
 
 	/**
@@ -207,8 +207,11 @@ class Cortex extends Cursor {
 	 * @return CortexCollection|bool
 	 */
 	protected function getCollection() {
-		return ($this->collection && $this->smartLoading)
-			? $this->collection : false;
+		if ($this->collection && $this->smartLoading) {
+			$cx = $this->collection->get();
+			return $cx ?: false;
+		}
+		return false;
 	}
 
 	/**
