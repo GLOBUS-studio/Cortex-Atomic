@@ -157,6 +157,8 @@ trait CastTrait {
 		$mapper_arr = $this->get($key);
 		if(!$mapper_arr)
 			return NULL;
+		if ($mapper_arr instanceof Cortex)
+			return $mapper_arr->cast(null,$rel_depths);
 		$out = [];
 		foreach ($mapper_arr as $mp)
 			$out[] = $mp->cast(null,$rel_depths);
@@ -249,21 +251,21 @@ trait CastTrait {
 	}
 
 	public function skip($ofs = 1) {
-		$this->reset(false);
+		$this->reset(false, false);
 		if ($this->mapper->skip($ofs))
 			return $this;
 		else
-			$this->reset(false);
+			$this->reset(false, false);
 	}
 
 	public function first() {
-		$this->reset(false);
+		$this->reset(false, false);
 		$this->mapper->first();
 		return $this;
 	}
 
 	public function last() {
-		$this->reset(false);
+		$this->reset(false, false);
 		$this->mapper->last();
 		return $this;
 	}

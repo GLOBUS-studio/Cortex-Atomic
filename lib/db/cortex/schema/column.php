@@ -22,8 +22,14 @@ class Column {
 
 	use DB_Utils;
 
-	public $name,$type,$nullable,$default,$after,$index,$unique,$passThrough,$pkey;
+	protected $name,$type,$nullable,$default,$after,$index,$unique,$passThrough,$pkey;
 	protected $table,$schema,$type_val;
+
+	public function __get($prop) {
+		if (property_exists($this, $prop))
+			return $this->{$prop};
+		return null;
+	}
 
 	const
 		TEXT_NoDataType='The specified datatype %s is not defined in %s driver. Add passThrough option to enforce this datatype.',
@@ -44,8 +50,8 @@ class Column {
 		$this->pkey=FALSE;
 
 		$this->table=$table;
-		$this->schema=$table->schema;
-		$this->db=$this->schema->db;
+		$this->schema=$table->getSchema();
+		$this->db=$this->schema->getDb();
 	}
 
 	/**
@@ -197,7 +203,7 @@ class Column {
 			$this->type_val=$this->type;
 		else {
 			$this->type_val=
-				$this->findQuery($this->schema->dataTypes[strtoupper($this->type)]);
+				$this->findQuery($this->schema->getDataTypes()[strtoupper($this->type)]);
 			if (!$this->type_val) {
 				if (Schema::$strict) {
 					trigger_error(sprintf(self::TEXT_NoDataType,strtoupper($this->type),
@@ -229,7 +235,7 @@ class Column {
 		if ($this->default!==FALSE) {
 			$def_cmds=[
 				'sqlite2?|mysql|pgsql'=>'DEFAULT',
-				'mssql|sybase|dblib|odbc|sqlsrv'=>'constraint DF_'.$this->table->name.'_'.
+				'mssql|sybase|dblib|odbc|sqlsrv'=>'constraint DF_'.$this->table->getName().'_'.
 					$this->name.' DEFAULT',
 				'ibm'=>'WITH DEFAULT',
 			];
@@ -262,12 +268,12 @@ class Column {
 		// timestamp default
 		if ($this->default===Schema::DF_CURRENT_TIMESTAMP) {
 			// check for right datatpye
-			$stamp_type=$this->findQuery($this->schema->dataTypes['TIMESTAMP']);
+			$stamp_type=$this->findQuery($this->schema->getDataTypes()['TIMESTAMP']);
 			if ($this->type!='TIMESTAMP' &&
 				($this->passThrough && strtoupper($this->type)!=strtoupper($stamp_type))
 			)
 				trigger_error(self::TEXT_CurrentStampDataType,E_USER_ERROR);
-			return $this->findQuery($this->schema->defaultTypes[strtoupper($this->default)]);
+			return $this->findQuery($this->schema->getDefaultTypes()[strtoupper($this->default)]);
 		} else {
 			// static defaults
 			$type_val=$this->getTypeVal();

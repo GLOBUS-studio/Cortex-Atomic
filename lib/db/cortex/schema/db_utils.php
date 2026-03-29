@@ -15,7 +15,14 @@ use DB\SQL;
 trait DB_Utils {
 
 	/** @var SQL */
-	public $db;
+	protected $db;
+
+	/**
+	 * @return SQL
+	 */
+	public function getDb() {
+		return $this->db;
+	}
 
 	/**
 	 * parse command array and return backend specific query

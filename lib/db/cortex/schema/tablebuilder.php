@@ -17,9 +17,12 @@ abstract class TableBuilder {
 	use DB_Utils;
 
 	protected $columns,$pkeys,$queries,$increments,$rebuild_cmd,$suppress;
-	public $name;
+	protected $name;
 	/** @var Schema */
-	public $schema;
+	protected $schema;
+
+	public function getName() { return $this->name; }
+	public function getSchema() { return $this->schema; }
 
 	const
 		TEXT_NoDefaultForTEXT="Column `%s` of type TEXT can't have a default value.",
@@ -36,7 +39,7 @@ abstract class TableBuilder {
 		$this->queries=[];
 		$this->pkeys=['id'];
 		$this->increments='id';
-		$this->db=$schema->db;
+		$this->db=$schema->getDb();
 	}
 
 	/**
@@ -60,9 +63,7 @@ abstract class TableBuilder {
 			trigger_error(sprintf(self::TEXT_ColumnExists,$key),E_USER_ERROR);
 		$column=new Column($key,$this);
 		if ($args)
-			foreach ($args as $arg=>$val)
-			    if (property_exists($column, $arg))
-				$column->{$arg}=$val;
+			$column->copyfrom($args);
 		// skip default pkey field
 		if (count($this->pkeys)==1 && in_array($key,$this->pkeys))
 			return $column;

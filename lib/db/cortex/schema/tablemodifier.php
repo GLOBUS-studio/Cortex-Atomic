@@ -251,7 +251,7 @@ class TableModifier extends TableBuilder {
 			foreach ($schema as $name=>&$cols) {
 				$default=($cols['default']==='')?NULL:$cols['default'];
 				if (!is_null($default) && ((is_int(strpos($curdef=strtolower(
-								$this->findQuery($this->schema->defaultTypes['CUR_STAMP'])),
+								$this->findQuery($this->schema->getDefaultTypes()['CUR_STAMP'])),
 								strtolower($default))) ||
 							is_int(strpos(strtolower($default),$curdef)))
 						|| $default=="('now'::text)::timestamp(0) without time zone")) {
@@ -368,7 +368,7 @@ class TableModifier extends TableBuilder {
 			$force=$col->passThrough;
 		}
 		if (!$force)
-			$datatype=$this->findQuery($this->schema->dataTypes[strtoupper($datatype)]);
+			$datatype=$this->findQuery($this->schema->getDataTypes()[strtoupper($datatype)]);
 		$table=$this->db->quotekey($this->name);
 		$column=$this->db->quotekey($name);
 		if (strpos($this->db->driver(),'sqlite')!==FALSE) {

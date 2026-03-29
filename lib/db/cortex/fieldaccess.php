@@ -288,14 +288,17 @@ trait FieldAccessTrait {
 	protected function emit($event, $val=null) {
 		if (isset($this->trigger[$event])) {
 			if (preg_match('/^[sg]et_/',$event)) {
-				$val = (is_string($f=$this->trigger[$event])
-					&& preg_match('/^[sg]et_/',$f))
-					? call_user_func([$this,$event],$val)
-					: \Base::instance()->call($f,[$this,$val]);
+				$f = $this->trigger[$event];
+				if (is_string($f) && preg_match('/^[sg]et_/',$f)) {
+					if (!method_exists($this,$event))
+						return $val;
+					$val = call_user_func([$this,$event],$val);
+				} else
+					$val = \Base::instance()->call($f,[$this,$val]);
 			} else
 				$val = \Base::instance()->call($this->trigger[$event],[$this,$val]);
 		} elseif (preg_match('/^[sg]et_/',$event) && method_exists($this,$event)) {
-			$this->trigger[] = $event;
+			$this->trigger[$event] = $event;
 			$val = call_user_func([$this,$event],$val);
 		}
 		return $val;

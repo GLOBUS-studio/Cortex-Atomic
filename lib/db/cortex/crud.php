@@ -123,10 +123,13 @@ trait CrudTrait {
 			// Jig can't group yet, but pending enhancement https://github.com/bcosca/fatfree/pull/616
 		}
 		if ($this->dbsType == 'sql' && !$count) {
-			$m_refl=new \ReflectionObject($this->mapper);
-			$m_ad_prop=$m_refl->getProperty('adhoc');
-			$m_refl_adhoc=$m_ad_prop->getValue($this->mapper);
-			unset($m_ad_prop,$m_refl);
+			static $adhocCache = [];
+			$mapperClass = get_class($this->mapper);
+			if (!isset($adhocCache[$mapperClass])) {
+				$adhocCache[$mapperClass] = (new \ReflectionObject($this->mapper))
+					->getProperty('adhoc');
+			}
+			$m_refl_adhoc = $adhocCache[$mapperClass]->getValue($this->mapper);
 		}
 		// sorting by relation helper: @field.field
 		if ($this->dbsType == 'sql' && !empty($options['order'])
@@ -375,10 +378,12 @@ trait CrudTrait {
 	}
 
 	/**
-	 * use a raw sql query to find results and factory them into models
-	 * @param $sql
-	 * @param array|null $args
-	 * @param int $ttl
+	 * Use a raw SQL query to find results and factory them into models.
+	 * WARNING: $query is passed to PDO exec with $args as bound parameters.
+	 * Always use parameterized queries — never concatenate user input into $query.
+	 * @param string $query parameterized SQL query
+	 * @param array|null $args bind parameters
+	 * @param int $ttl cache TTL
 	 * @return static[]|\DB\CortexCollection
 	 */
 	public function findByRawSQL($query, $args=NULL, $ttl=0) {
@@ -428,6 +433,7 @@ trait CrudTrait {
 	 * @return bool
 	 */
 	public function erase($filter = null) {
+		$rawFilter = $filter;
 		$filter = $this->queryParser->prepareFilter($filter, $this->dbsType, $this->db,null,$this->primary);
 		if (!$filter) {
 			if ($this->emit('beforeerase')===false)
@@ -479,7 +485,11 @@ trait CrudTrait {
 					$this->db->begin();
 				try {
 					$clone = clone($this);
-					while ($clone->load($filter)) {
+					$maxIterations = 10000;
+					$i = 0;
+					while ($clone->load($rawFilter)) {
+						if (++$i > $maxIterations)
+							throw new \Exception('erase() with filter exceeded maximum iterations ('.$maxIterations.'). Possible infinite loop due to failed delete.');
 						$clone->erase();
 						$clone->reset();
 					}

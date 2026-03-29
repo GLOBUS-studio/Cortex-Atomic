@@ -29,7 +29,7 @@ class Schema {
 
 	use DB_Utils;
 
-	public
+	protected
 		$dataTypes=[
 			'BOOLEAN'=>[
 				'mysql'=>'tinyint(1)',
@@ -123,7 +123,7 @@ class Schema {
 			],
 		];
 
-	public
+	protected
 		$name;
 
 	public static
@@ -168,6 +168,20 @@ class Schema {
 	}
 
 	/**
+	 * @return array
+	 */
+	public function getDataTypes() {
+		return $this->dataTypes;
+	}
+
+	/**
+	 * @return array
+	 */
+	public function getDefaultTypes() {
+		return $this->defaultTypes;
+	}
+
+	/**
 	 * Enable FK enforcement on the connection (required for SQLite)
 	 * @param SQL $db
 	 */
@@ -184,7 +198,7 @@ class Schema {
 	 */
 	static function resolveColumnType(SQL $db, string $type): string {
 		$schema = new static($db);
-		$types = $schema->dataTypes;
+		$types = $schema->getDataTypes();
 		$type = strtoupper($type);
 		if (!isset($types[$type]))
 			return $type;

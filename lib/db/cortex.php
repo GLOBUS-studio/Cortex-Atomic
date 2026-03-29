@@ -56,6 +56,7 @@ class Cortex extends Cursor {
 		$fieldsCache,   // relation field cache
 		$saveCsd,       // mm rel save cascade
 		$collection,    // collection
+		$trigger = [],  // custom field event handlers
 		$relFilter,     // filter for loading related models
 		$hasCond,       // IDs of records the next find should have
 		$whitelist,     // restrict to these fields
@@ -259,8 +260,7 @@ class Cortex extends Cursor {
 	}
 
 	function getiterator() {
-//		return new \ArrayIterator($this->cast(null,false));
-		return new \ArrayIterator([]);
+		return new \ArrayIterator($this->cast(null,0));
 	}
 }
 

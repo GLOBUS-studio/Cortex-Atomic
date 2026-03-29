@@ -117,6 +117,13 @@ foreach ($dbs as $type => $db) {
     $results = array_merge($results, (array)$test->run($db, $type));
 }
 
+// Test Fixes (#7–#21 regression/coverage tests)
+foreach ($dbs as $type => $db) {
+    $f3->set('DB', $db);
+    $test = new \Test_Fixes();
+    $results = array_merge($results, (array)$test->run($db, $type));
+}
+
 // Output results
 echo str_repeat('=', 70).PHP_EOL;
 echo "  CORTEX-ATOMIC TEST RESULTS".PHP_EOL;

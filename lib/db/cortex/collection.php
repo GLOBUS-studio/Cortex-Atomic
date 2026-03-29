@@ -22,8 +22,13 @@ class CortexCollection extends \ArrayIterator {
 		parent::__construct();
 	}
 
-	//! Prohibit cloning to ensure an existing relation cache
-	private function __clone() { }
+	/**
+	 * Clone collection with independent relSets cache
+	 */
+	public function __clone() {
+		$this->cid = uniqid('cortex_collection_');
+		$this->relSets = [];
+	}
 
 	/**
 	 * set a collection of models

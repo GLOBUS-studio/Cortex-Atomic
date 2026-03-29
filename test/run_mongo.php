@@ -10,6 +10,9 @@
 // Autoloader
 require __DIR__.'/vendor/autoload.php';
 
+// Ensure DB\SQL\Schema alias is registered (schema.php creates it via class_alias)
+class_exists(\DB\Cortex\Schema\Schema::class);
+
 // Bootstrap F3
 $f3 = \Base::instance();
 $f3->set('QUIET', true);
@@ -83,6 +86,14 @@ foreach ($dbs as $type => $db) {
 //   - Test_Eager       (depends on SQL\Schema in seedData)
 //   - Test_Hardened    (findByRawSQL, SQL parser, quotekey)
 //   - Test_Schema      (SQL DDL: CREATE/ALTER/DROP TABLE)
+//   - Test_Fixes       (SQL-specific sections are auto-skipped for Mongo)
+
+// Test Fixes (#7-#21 regression/coverage tests — non-SQL sections run)
+foreach ($dbs as $type => $db) {
+    $f3->set('DB', $db);
+    $test = new \Test_Fixes();
+    $results = array_merge($results, (array)$test->run($db, $type));
+}
 
 // --- Output results ---
 echo str_repeat('=', 70).PHP_EOL;

@@ -24,6 +24,10 @@ trait SchemaBuilderTrait {
 	 * @return array
 	 */
 	static public function resolveConfiguration() {
+		static $configCache = [];
+		$class = static::class;
+		if (isset($configCache[$class]))
+			return $configCache[$class];
 		static::$init=true;
 		$self = new static();
 		static::$init=false;
@@ -36,6 +40,7 @@ trait SchemaBuilderTrait {
 			'charset'=>$self->charset,
 		];
 		unset($self);
+		$configCache[$class] = $conf;
 		return $conf;
 	}
 
@@ -68,6 +73,7 @@ trait SchemaBuilderTrait {
 		if ($db instanceof SQL) {
 			$schema = new Schema($db);
 			Schema::enableForeignKeys($db);
+			$tables = $schema->getTables(); // cache table list to avoid repeated queries
 			$belongsToFK = []; // collect belongs-to-one for FK after table build
 			$pendingPivots = []; // collect m:m pivot info for deferred creation
 			// prepare field configuration
@@ -88,7 +94,7 @@ trait SchemaBuilderTrait {
 							$mmTable = isset($relConf[2]) ? $relConf[2] :
 								static::getMMTableName($rel['table'], $relConf['relField'],
 									$table, $key, $rel['fieldConf'][$relConf[1]]['has-many']);
-							if (!in_array($mmTable,$schema->getTables())) {
+							if (!in_array($mmTable,$tables)) {
 								$toConf = $relConf[0]::resolveRelationConf($rel['fieldConf'][$relConf[1]]);
 								$relField = $relConf['isSelf']?$relConf['selfRefField']:$relConf['relField'];
 								$col2Name = $toConf['has-many']['relField'];
@@ -137,7 +143,7 @@ trait SchemaBuilderTrait {
 				unset($field);
 			}
 			$tableName = $table; // save before reassignment
-			if (!in_array($table, $schema->getTables())) {
+			if (!in_array($table, $tables)) {
 				// create table
 				$table = $schema->createTable($table);
 				if (isset($df) && $df['charset'])
@@ -162,10 +168,12 @@ trait SchemaBuilderTrait {
 				//     $table->dropColumn($col);
 				$table->build();
 			}
+			// refresh table list after main table creation/modification
+			$tables = $schema->getTables();
 			// create deferred pivot tables (after main table exists)
 			foreach ($pendingPivots as $pv) {
-				$canAddFK = in_array($pv['relTable'], $schema->getTables())
-					&& in_array($tableName, $schema->getTables());
+				$canAddFK = in_array($pv['relTable'], $tables)
+					&& in_array($tableName, $tables);
 				if ($canAddFK) {
 					$schema->createPivotTable(
 						$pv['mmTable'],
@@ -187,8 +195,9 @@ trait SchemaBuilderTrait {
 				}
 			}
 			// add belongs-to-one FK constraints (skipped on SQLite)
+			$tables = $schema->getTables(); // refresh after pivot creation
 			foreach ($belongsToFK as $col => $ref) {
-				if (in_array($ref['table'], $schema->getTables()))
+				if (in_array($ref['table'], $tables))
 					$schema->addForeignKey(
 						$tableName, $col,
 						$ref['table'], $ref['column'], 'SET NULL'
@@ -305,7 +314,7 @@ trait SchemaBuilderTrait {
 				$rel = $relConf[0]::resolveConfiguration();
 				// check if foreign conf matches m:m
 				if (!is_null($relConf[1]) && array_key_exists($relConf[1],$rel['fieldConf'])
-					&& key($rel['fieldConf'][$relConf[1]]) == 'has-many') {
+				&& array_key_exists('has-many', $rel['fieldConf'][$relConf[1]])) {
 					// compute mm table name
 					$deletable[] = $relConf[2] ?? static::getMMTableName(
                         $rel['table'], $relConf[1], $table, $key,

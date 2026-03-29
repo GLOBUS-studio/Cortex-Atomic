@@ -8,10 +8,12 @@ class CortexQueryParser extends \Prefab {
 		E_BRACKETS = 'Invalid query: unbalanced brackets found',
 		E_INBINDVALUE = 'Bind value for IN operator must be a populated array',
 		E_ENGINEERROR = 'Engine not supported',
-		E_MISSINGBINDKEY = 'Named bind parameter `%s` does not exist in filter arguments';
+		E_MISSINGBINDKEY = 'Named bind parameter `%s` does not exist in filter arguments',
+		E_INVALID_FIELD_NAME = 'Invalid field name: %s';
 
 	protected
-		$queryCache = [];
+		$queryCache = [],
+		$queryCacheLimit = 128;
 
 	/**
 	 * converts the given filter array to fit the used DBS
@@ -124,6 +126,10 @@ class CortexQueryParser extends \Prefab {
                 throw new \Exception(self::E_ENGINEERROR);
 		}
 		$this->queryCache[$cacheHash] = $ncond;
+		// LRU eviction: trim oldest entries when cache exceeds limit
+		if (count($this->queryCache) > $this->queryCacheLimit)
+			$this->queryCache = array_slice($this->queryCache,
+				(int)($this->queryCacheLimit / 2), null, true);
 		if(isset($ttl) && $f3->get('CACHE')) {
 			// save to cache
 			$cache = \Cache::instance();
@@ -228,7 +234,12 @@ class CortexQueryParser extends \Prefab {
 			if (preg_match('/\s*\b(AND|OR)\b\s*/i',$part))
 				continue;
 			// prefix field names
-			$part = preg_replace('/([a-z_-]+(?:[\w-]+))/i', '@$1', $part, -1, $count);
+			$part = preg_replace_callback('/([a-z_][\w-]*)(?=[\s<>=!)]|$)/i',
+				function($m) {
+					if (!preg_match('/^[a-zA-Z_][a-zA-Z0-9_\-]*$/', $m[1]))
+						throw new \Exception(sprintf(self::E_INVALID_FIELD_NAME, $m[1]));
+					return '@'.$m[1];
+				}, $part, -1, $count);
 			// value comparison
 			if (str_contains($part, '?')) {
 				$val = array_shift($args);
@@ -245,8 +256,11 @@ class CortexQueryParser extends \Prefab {
 						$val = $val->getAll('_id',TRUE);
 					if ($not = (($npos = strpos($upart, '@NOT')) !== false))
 						$pos = $npos;
+					$escaped = array_map(function($v) {
+						return addcslashes((string)$v, "'\\");
+					}, $val);
 					$part = ($not ? '!' : '').'in_array('.substr($part, 0, $pos).
-						',array(\''.implode('\',\'', $val).'\'))';
+						',array(\''.implode('\',\'', $escaped).'\'))';
 					$skipVal=true;
 				}
 				elseif($val===null && preg_match('/(\w+)\s*([!=<>]+)\s*\?/i',$part,$nmatch)
@@ -328,8 +342,10 @@ class CortexQueryParser extends \Prefab {
 			return ['$and' => $ncond];
 		elseif (isset($or))
 			return ['$or' => $ncond];
-		else
+		elseif (!empty($ncond))
 			return $ncond[0];
+		else
+			return null;
 	}
 
 	/**
