@@ -1570,6 +1570,67 @@ class Test_Hardened {
 		$b2Author->erase();
 
 		// ================================================================
+		// IN OPERATOR VARIANTS
+		// ================================================================
+
+		// create test data for IN
+		$inAuthor1 = new \AuthorModel();
+		$inAuthor1->name = 'InTest Author A';
+		$inAuthor1->save();
+		$inAuthor2 = new \AuthorModel();
+		$inAuthor2->name = 'InTest Author B';
+		$inAuthor2->save();
+		$inAuthor3 = new \AuthorModel();
+		$inAuthor3->name = 'InTest Author C';
+		$inAuthor3->save();
+		$inIds = [$inAuthor1->_id, $inAuthor2->_id, $inAuthor3->_id];
+
+		// IN (?) - positional with parens
+		$inRes1 = new \AuthorModel();
+		$found1 = $inRes1->find(['_id IN (?)', $inIds]);
+		$test->expect(
+			$found1 && count($found1) === 3,
+			$type.': IN (?) with array expands correctly ('.($found1 ? count($found1) : 0).' rows)'
+		);
+
+		// IN ? - positional without parens
+		$inRes2 = new \AuthorModel();
+		$found2 = $inRes2->find(['_id IN ?', $inIds]);
+		$test->expect(
+			$found2 && count($found2) === 3,
+			$type.': IN ? without parens works ('.($found2 ? count($found2) : 0).' rows)'
+		);
+
+		// IN (:ids) - named param with parens
+		$inRes3 = new \AuthorModel();
+		$found3 = $inRes3->find(['_id IN (:ids)', ':ids' => $inIds]);
+		$test->expect(
+			$found3 && count($found3) === 3,
+			$type.': IN (:ids) named param with parens works ('.($found3 ? count($found3) : 0).' rows)'
+		);
+
+		// IN (?) combined with AND
+		$inRes4 = new \AuthorModel();
+		$found4 = $inRes4->find(['_id IN (?) AND name LIKE ?', $inIds, 'InTest%']);
+		$test->expect(
+			$found4 && count($found4) === 3,
+			$type.': IN (?) AND condition works ('.($found4 ? count($found4) : 0).' rows)'
+		);
+
+		// IN (?) with subset
+		$inRes5 = new \AuthorModel();
+		$found5 = $inRes5->find(['_id IN (?)', [$inIds[0], $inIds[2]]]);
+		$test->expect(
+			$found5 && count($found5) === 2,
+			$type.': IN (?) with 2-element subset ('.($found5 ? count($found5) : 0).' rows)'
+		);
+
+		// cleanup IN test data
+		$inAuthor1->erase();
+		$inAuthor2->erase();
+		$inAuthor3->erase();
+
+		// ================================================================
 		// CLEANUP
 		// ================================================================
 		\NewsModel::setdown();
