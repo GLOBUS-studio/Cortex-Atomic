@@ -37,7 +37,15 @@ trait RelationTrait {
                 throw new \Exception(sprintf(self::E_UNKNOWN_FIELD,$key,get_called_class()));
 			if (!isset($this->fieldConf[$key]['relType']))
                 throw new \Exception(self::E_HAS_COND);
-			$this->hasCond[$key] = [$filter,$options];
+			// support OR-chaining: append to existing condition instead of overwriting
+			if (isset($this->hasCond[$key]) && $options && !empty($options['OR'])) {
+				$prev = $this->hasCond[$key];
+				$merged = $this->mergeFilter([$prev[0], $filter], 'or');
+				$mergedOpts = $prev[1] ?: $options;
+				$this->hasCond[$key] = [$merged, $mergedOpts];
+			} else {
+				$this->hasCond[$key] = [$filter,$options];
+			}
 		}
 		return $this;
 	}
