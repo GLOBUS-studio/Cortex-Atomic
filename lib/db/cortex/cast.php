@@ -83,7 +83,7 @@ trait CastTrait {
 					elseif (isset($this->fieldConf[$key]['type'])) {
 						if ($this->dbsType == 'sql') {
 							if ($this->fieldConf[$key]['type'] == self::DT_SERIALIZED)
-								$val=unserialize($mp->mapper->{$key}?:'');
+								$val=unserialize($mp->mapper->{$key}?:'', ['allowed_classes' => false]);
 							elseif ($this->fieldConf[$key]['type'] == self::DT_JSON)
 								$val=json_decode($mp->mapper->{$key}?:'', true);
 						}
@@ -180,7 +180,7 @@ trait CastTrait {
 				if ($this->fieldConf[$key]['type'] == self::DT_JSON && is_string($val))
 					$val = json_decode($val?:'',true);
 				elseif ($this->fieldConf[$key]['type'] == self::DT_SERIALIZED && is_string($val))
-					$val = unserialize($val?:'');
+					$val = unserialize($val?:'', ['allowed_classes' => false]);
 			}
 			$this->set($key, $val);
 		}
@@ -347,7 +347,7 @@ trait CastTrait {
 			if ($this->fieldConf[$key]['type'] == self::DT_JSON)
 				return json_decode($fields[$key]['initial'], true);
 			elseif ($this->fieldConf[$key]['type'] == self::DT_SERIALIZED)
-				return unserialize($fields[$key]['initial']);
+				return unserialize($fields[$key]['initial'], ['allowed_classes' => false]);
 		}
 		return $fields[$key]['initial'];
 	}

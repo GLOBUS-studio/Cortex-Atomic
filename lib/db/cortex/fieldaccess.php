@@ -97,6 +97,10 @@ trait FieldAccessTrait {
 	 * @param array $config
 	 */
 	function setFieldConfiguration(array $config) {
+		foreach ($config as $fk => $conf) {
+			if (isset($conf['type']) && $conf['type'] === self::DT_SERIALIZED)
+				@trigger_error(sprintf('Field "%s": %s', $fk, self::E_DT_SERIALIZED_DEPRECATED), E_USER_DEPRECATED);
+		}
 		$this->fieldConf = $config;
 		$this->reset();
 	}
@@ -586,7 +590,7 @@ trait FieldAccessTrait {
 			elseif (isset($fields[$key]['type'])) {
 				if ($this->dbsType == 'sql') {
 					if ($fields[$key]['type'] == self::DT_SERIALIZED)
-						$this->fieldsCache[$key] = unserialize($this->mapper->{$key});
+						$this->fieldsCache[$key] = unserialize($this->mapper->{$key}, ['allowed_classes' => false]);
 					elseif ($fields[$key]['type'] == self::DT_JSON)
 						$this->fieldsCache[$key] = json_decode($this->mapper->{$key}?:'',true);
 				}

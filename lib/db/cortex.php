@@ -1,7 +1,7 @@
 <?php
 
 /**
- *  Cortex-Atomic — a multi-engine ORM / ODM
+ *  Cortex-Atomic - a multi-engine ORM / ODM
  *  Part of Atomic Framework: https://github.com/MADEVAL/Atomic-Framework
  *
  *  Developed by GLOBUS.studio
@@ -16,7 +16,7 @@
  *  can be waived if you get permission from the copyright holder.
  *
  *  @package DB
- *  @version 1.8.0-atomic
+ *  @version 1.8.1-atomic
  *  @date 29.03.2026
  *  @since 22.01.2013
  */
@@ -80,11 +80,13 @@ class Cortex extends Cursor {
 
 	const
 		// special datatypes
+		/** @deprecated Use DT_JSON instead. DT_SERIALIZED is unsafe and will be removed in a future version. */
 		DT_SERIALIZED = 'SERIALIZED',
 		DT_JSON = 'JSON',
 
 		// error messages
-		E_ARRAY_DATATYPE = 'Unable to save an Array in field %s. Use DT_SERIALIZED or DT_JSON.',
+		E_ARRAY_DATATYPE = 'Unable to save an Array in field %s. Use DT_JSON.',
+		E_DT_SERIALIZED_DEPRECATED = 'DT_SERIALIZED is deprecated and will be removed in a future version. Use DT_JSON instead.',
 		E_CONNECTION = 'No valid DB Connection given.',
 		E_NO_TABLE = 'No table specified.',
 		E_UNKNOWN_DB_ENGINE = 'This unknown DB system is not supported: %s',
@@ -167,8 +169,11 @@ class Cortex extends Cursor {
 		$this->standardiseID = $f3->exists('CORTEX.standardiseID') ?
 			$f3->get('CORTEX.standardiseID') : TRUE;
 		if (!empty($this->fieldConf))
-			foreach($this->fieldConf as &$conf) {
+			foreach($this->fieldConf as $fk=>&$conf) {
 				$conf=static::resolveRelationConf($conf, $this->primary);
+				// emit deprecation notice for DT_SERIALIZED fields
+				if (isset($conf['type']) && $conf['type'] === self::DT_SERIALIZED)
+					@trigger_error(sprintf('Field "%s": %s', $fk, self::E_DT_SERIALIZED_DEPRECATED), E_USER_DEPRECATED);
 				unset($conf);
 			}
 	}

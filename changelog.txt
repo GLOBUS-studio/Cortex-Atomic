@@ -3,45 +3,60 @@ https://github.com/GLOBUS-studio/Cortex-Atomic
 Part of Atomic Framework: https://github.com/MADEVAL/Atomic-Framework
 Based on Cortex by ikkez (Christian Knuth) for Fat-Free Framework.
 
+1.8.1-atomic (29.03.2026)
+
+  [Security]
+*	fixed unsafe unserialize() calls - added ['allowed_classes' => false] in 4 locations
+	(fieldaccess.php get(), cast.php cast(), copyfrom(), initial())
+	- prevents PHP Object Injection via crafted serialized data (CWE-502)
+
+  [Deprecation]
+*	DT_SERIALIZED is now deprecated - use DT_JSON instead
+	- emits E_USER_DEPRECATED via @trigger_error() when DT_SERIALIZED field is configured
+	- deprecation fires in both static fieldConf (initMapper) and setFieldConfiguration()
+	- uses @trigger_error() pattern to avoid F3 error handler abort (compatible with Symfony-style
+	  deprecation logging tools)
+*	updated E_ARRAY_DATATYPE error message to recommend DT_JSON only
+
 1.8.0-atomic (29.03.2026)
 
   [Fork & Modernization]
 *	forked as Cortex-Atomic by GLOBUS.studio for Atomic Framework
 *	PHP 8.0+ minimum requirement
-*	PHP 8.5 compatible — fully tested and working
+*	PHP 8.5 compatible - fully tested and working
 *	replaced all is_int(strpos()) with str_contains() (~20 occurrences)
 *	removed deprecated setAccessible() calls (unnecessary since PHP 8.1, deprecated in 8.5)
 
-  [Architecture — Level 1: Class Extraction]
+  [Architecture - Level 1: Class Extraction]
 *	extracted CortexQueryParser into lib/db/cortex/queryparser.php
 *	extracted CortexCollection into lib/db/cortex/collection.php
 
-  [Architecture — Level 3: Trait Decomposition]
+  [Architecture - Level 3: Trait Decomposition]
 *	extracted SchemaBuilderTrait into lib/db/cortex/schemabuilder.php
-	— setup(), setdown(), resolveConfiguration(), defaults(), dbtype()
+	- setup(), setdown(), resolveConfiguration(), defaults(), dbtype()
 *	extracted CastTrait into lib/db/cortex/cast.php
-	— cast(), castField(), castRow(), fieldConf types DT_JSON / DT_SERIALIZED
+	- cast(), castField(), castRow(), fieldConf types DT_JSON / DT_SERIALIZED
 *	extracted FieldAccessTrait into lib/db/cortex/fieldaccess.php
-	— get(), set(), exists(), clear(), fields(), virtual(), copyfrom(), copyto(), copyto_flat()
+	- get(), set(), exists(), clear(), fields(), virtual(), copyfrom(), copyto(), copyto_flat()
 *	extracted RelationTrait into lib/db/cortex/relation.php
-	— has(), orHas(), filter(), rel(), countRel(), mergeFilter(), all relation loading
+	- has(), orHas(), filter(), rel(), countRel(), mergeFilter(), all relation loading
 *	extracted CrudTrait into lib/db/cortex/crud.php
-	— find(), findone(), afind(), findByRawSQL(), load(), save(), erase(), count(), paginate()
+	- find(), findone(), afind(), findByRawSQL(), load(), save(), erase(), count(), paginate()
 *	cortex.php reduced from ~2800 lines to ~240 lines (thin orchestrator + traits)
 
   [Bug Fixes]
 *	fixed unserialize(null) deprecation warning in CastTrait (PHP 8.5)
 
-  [Test Suite — 247 Tests]
+  [Test Suite - 247 Tests]
 *	added CLI test runner (test/run.php) with SQLite backend
-*	test_syntax.php — 19 tests: operators, NULL, IN, LIKE, logical chaining, order/limit
-*	test_relation.php — 29 tests: belongs-to-one, has-one, has-many, m:m, self-ref, erase cascade
-*	test_filter.php — 26 tests: has-filter, pagination, whitelists, countRel, nested has, datetime
-*	test_common.php — 21 tests: copyfrom/copyto, cast depths, collection API, query parser
-*	test_coverage.php — 44 tests: public methods, error paths, event hooks, edge cases
-*	test_collection.php — 32 tests: CortexCollection, castAll, getAll, getBy, orderBy, slice, compare
-*	test_coverage_extra.php — 76 tests: compare(), rel(), countRel, fluid SQL mode, touch(), virtual()
-*	all 247 tests passing on PHP 8.0 — 8.5
+*	test_syntax.php - 19 tests: operators, NULL, IN, LIKE, logical chaining, order/limit
+*	test_relation.php - 29 tests: belongs-to-one, has-one, has-many, m:m, self-ref, erase cascade
+*	test_filter.php - 26 tests: has-filter, pagination, whitelists, countRel, nested has, datetime
+*	test_common.php - 21 tests: copyfrom/copyto, cast depths, collection API, query parser
+*	test_coverage.php - 44 tests: public methods, error paths, event hooks, edge cases
+*	test_collection.php - 32 tests: CortexCollection, castAll, getAll, getBy, orderBy, slice, compare
+*	test_coverage_extra.php - 76 tests: compare(), rel(), countRel, fluid SQL mode, touch(), virtual()
+*	all 247 tests passing on PHP 8.0 - 8.5
 
   [Project Hygiene]
 *	separated composer.json for library and tests

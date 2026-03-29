@@ -4,7 +4,7 @@
 Developed and maintained by [GLOBUS.studio](https://github.com/GLOBUS-studio/Cortex-Atomic).
 Based on [Cortex](https://github.com/ikkez/F3-Sugar/tree/master/Cortex) by Christian Knuth (ikkez) for [Fat-Free Framework](https://fatfreeframework.com/).
 
-> PHP 8.0 — 8.5 | SQLite, MySQL, PostgreSQL, SQL Server, MongoDB, Jig
+> PHP 8.0 - 8.5 | SQLite, MySQL, PostgreSQL, SQL Server, MongoDB, Jig
 > 247 tests | GPLv3
 
 ### A multi-engine ORM / ODM - Cortex-Atomic
@@ -25,18 +25,18 @@ Cortex is a multi-engine ActiveRecord ORM / ODM that offers easy object persiste
 
 #### Changes from the original Cortex
 
-  - **PHP 8.0+** — minimum requirement, uses `str_contains()`, removed deprecated `setAccessible()` calls
-  - **PHP 8.5 compatible** — fully tested and working (247 tests)
-  - **Trait-based architecture** — Cortex class decomposed into 5 focused traits:
-    - `SchemaBuilderTrait` — table setup/setdown, schema resolution, defaults
-    - `CastTrait` — casting mappers to arrays, field type serialization
-    - `FieldAccessTrait` — get/set, virtual fields, copyfrom/copyto, field whitelists
-    - `RelationTrait` — has/filter, relation loading, countRel, mergeFilter
-    - `CrudTrait` — find, load, save, erase, count, paginate, findByRawSQL
-  - **Extracted classes** — `CortexQueryParser` and `CortexCollection` in separate files (`lib/db/cortex/`)
-  - **247 tests** — comprehensive test suite on SQLite covering all public API, relations, edge cases, events
-  - **Atomic Framework** — prepared for integration into the [Atomic ecosystem](https://github.com/MADEVAL/Atomic-Framework)
-  - **Fat-Free Framework** — fully compatible with F3 3.9.x as standalone ORM
+  - **PHP 8.0+** - minimum requirement, uses `str_contains()`, removed deprecated `setAccessible()` calls
+  - **PHP 8.5 compatible** - fully tested and working (247 tests)
+  - **Trait-based architecture** - Cortex class decomposed into 5 focused traits:
+    - `SchemaBuilderTrait` - table setup/setdown, schema resolution, defaults
+    - `CastTrait` - casting mappers to arrays, field type serialization
+    - `FieldAccessTrait` - get/set, virtual fields, copyfrom/copyto, field whitelists
+    - `RelationTrait` - has/filter, relation loading, countRel, mergeFilter
+    - `CrudTrait` - find, load, save, erase, count, paginate, findByRawSQL
+  - **Extracted classes** - `CortexQueryParser` and `CortexCollection` in separate files (`lib/db/cortex/`)
+  - **247 tests** - comprehensive test suite on SQLite covering all public API, relations, edge cases, events
+  - **Atomic Framework** - prepared for integration into the [Atomic ecosystem](https://github.com/MADEVAL/Atomic-Framework)
+  - **Fat-Free Framework** - fully compatible with F3 3.9.x as standalone ORM
 
 
 ---
@@ -2075,15 +2075,15 @@ php test/run.php
 
 Tests run against SQLite (no external DB server required). The suite covers:
 
-- **Syntax** (19 tests) — operators, NULL checks, IN, LIKE, logical chaining, order, limit
-- **Relations** (29 tests) — belongs-to-one, has-one, has-many, many-to-many, self-referencing, erase cascade
-- **Filters** (26 tests) — has-filter, pagination, whitelists, countRel, nested has-filter, datetime
-- **Common** (21 tests) — copyfrom/copyto, cast with relation depths, collection API, query parser
-- **Coverage** (44 tests) — public methods, error paths, event hooks, edge cases
-- **Collection** (32 tests) — CortexCollection API: castAll, getAll, getBy, orderBy, slice, compare
-- **Coverage Extra** (76 tests) — compare(), rel(), countRel, fluid SQL mode, touch(), virtual()
+- **Syntax** (19 tests) - operators, NULL checks, IN, LIKE, logical chaining, order, limit
+- **Relations** (29 tests) - belongs-to-one, has-one, has-many, many-to-many, self-referencing, erase cascade
+- **Filters** (26 tests) - has-filter, pagination, whitelists, countRel, nested has-filter, datetime
+- **Common** (21 tests) - copyfrom/copyto, cast with relation depths, collection API, query parser
+- **Coverage** (44 tests) - public methods, error paths, event hooks, edge cases
+- **Collection** (32 tests) - CortexCollection API: castAll, getAll, getBy, orderBy, slice, compare
+- **Coverage Extra** (76 tests) - compare(), rel(), countRel, fluid SQL mode, touch(), virtual()
 
-**247 tests total**, all passing on PHP 8.0 — 8.5.
+**247 tests total**, all passing on PHP 8.0 - 8.5.
 
 ### File structure
 
@@ -2114,7 +2114,7 @@ If you find any issues or bugs, please file a [new Issue](https://github.com/GLO
 
 ## License
 
-GPLv3 — see [LICENSE](LICENSE)
+GPLv3 - see [LICENSE](LICENSE)
 
 ---
 
