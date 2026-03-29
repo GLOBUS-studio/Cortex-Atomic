@@ -1,5 +1,20 @@
 CHANGELOG - Cortex ORM
 
+1.8.0-atomic (29.03.2026)
+*	mod: forked as Cortex-Atomic by GLOBUS studio
+*	PHP 8.0+ minimum requirement
+*	PHP 8.5 compatible - tested and working
+*	replaced all is_int(strpos()) with str_contains() (~20 occurrences)
+*	removed deprecated setAccessible() calls (unnecessary since PHP 8.1, deprecated in 8.5)
+*	extracted CortexQueryParser into lib/db/cortex/queryparser.php
+*	extracted CortexCollection into lib/db/cortex/collection.php
+*	added CLI test runner (test/run.php) with SQLite backend
+*	separated composer.json for library and tests
+*	removed unused test files: bookmodel, productsmodel, newsmodel2, newsmodel.ini
+*	removed legacy web test runner and benchmark (test/app/, test/bench/)
+*	added .gitignore
+*	updated documentation (README)
+
 1.7.8 (25.02.2025)
 *   fix: php 8.4 deprecations #137
 *   fix: keep existing pivot records when updating m:m fields, #129

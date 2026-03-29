@@ -1,8 +1,5 @@
-![Cortex](https://ikkez.de/linked/cortex_icon.png)
-***
-
 > **Mod version of Cortex [ikkez/f3-cortex](https://github.com/ikkez/F3-Sugar/tree/master/Cortex).**
-> PHP 8.0-8.5 and Atomic Framework [GLOBUS studio](https://github.com/GLOBUS-studio) or Fat-Fraa Framework
+> PHP 8.0-8.5 and Atomic Framework [GLOBUS studio](https://github.com/GLOBUS-studio) or Fat-Free Framework
 > Original author: [Christian Knuth (ikkez)](https://github.com/ikkez).
 
 ### A multi-engine ORM / ODM - Cortex-Atomic
