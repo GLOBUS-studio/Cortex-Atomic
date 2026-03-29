@@ -67,6 +67,8 @@ class CortexQueryParser extends \Prefab {
 				$ncond = $this->_jig_parse_filter($where, $args);
 				break;
 			case 'mongo':
+				// translate canonical 'id' to MongoDB '_id'
+				$where = preg_replace('/\bid\b/', '_id', $where);
 				$parts = $this->splitLogical($where);
 				if (str_contains($where, ':'))
 					list($parts, $args) = $this->convertNamedParams($parts, $args);
@@ -182,7 +184,7 @@ class CortexQueryParser extends \Prefab {
 			function($match) use($db) {
 				if (!isset($match[1]))
 					return $match[0];
-				if (preg_match('/\b(AND|OR|IN|LIKE|NOT|IS|NULL|BETWEEN|EXISTS|TRUE|FALSE|ASC|DESC|HAVING|SELECT|FROM|WHERE|AS|ON|JOIN|LEFT|RIGHT|INNER|OUTER|CASE|WHEN|THEN|ELSE|END|CAST|DISTINCT|LIMIT|OFFSET|GROUP|ORDER|BY)\b/i',$match[1]))
+				if (preg_match('/\b(AND|OR|IN|LIKE|ILIKE|NOT|IS|NULL|BETWEEN|EXISTS|TRUE|FALSE|ASC|DESC|HAVING|SELECT|FROM|WHERE|AS|ON|JOIN|LEFT|RIGHT|INNER|OUTER|CASE|WHEN|THEN|ELSE|END|CAST|DISTINCT|LIMIT|OFFSET|GROUP|ORDER|BY)\b/i',$match[1]))
 					return $match[1];
 				return $db->quotekey($match[1]);
 			}, $cond);
@@ -204,7 +206,7 @@ class CortexQueryParser extends \Prefab {
 			function($match) use($table) {
 				if (!isset($match[3]))
 					return $match[1];
-				if (preg_match('/\b(AND|OR|IN|LIKE|NOT|IS|NULL|BETWEEN|EXISTS|TRUE|FALSE|ASC|DESC|HAVING|SELECT|FROM|WHERE|AS|ON|JOIN|LEFT|RIGHT|INNER|OUTER|CASE|WHEN|THEN|ELSE|END|CAST|COUNT|SUM|AVG|MIN|MAX|DISTINCT|LIMIT|OFFSET|GROUP|ORDER|BY)\b/i',$match[3]))
+				if (preg_match('/\b(AND|OR|IN|LIKE|ILIKE|NOT|IS|NULL|BETWEEN|EXISTS|TRUE|FALSE|ASC|DESC|HAVING|SELECT|FROM|WHERE|AS|ON|JOIN|LEFT|RIGHT|INNER|OUTER|CASE|WHEN|THEN|ELSE|END|CAST|COUNT|SUM|AVG|MIN|MAX|DISTINCT|LIMIT|OFFSET|GROUP|ORDER|BY)\b/i',$match[3]))
 					return $match[0];
 				return $match[2].$table.'.'.$match[3];
 			}, $cond);
@@ -354,7 +356,9 @@ class CortexQueryParser extends \Prefab {
 			$upart = strtoupper($match[0]);
 			// MongoID shorthand
 			if ($key == '_id' || (isset($fieldConf[$key]) && isset($fieldConf[$key]['relType']))) {
-				if (is_array($var))
+				if (is_null($var)) {
+					// leave null for null comparisons
+				} elseif (is_array($var))
 					foreach ($var as &$id) {
 						if ($db->legacy() && !$id instanceof \MongoId)
 							$id = new \MongoId($id);
@@ -382,7 +386,7 @@ class CortexQueryParser extends \Prefab {
 			elseif (!in_array($match[0], ['==', '='])) {
 				$opr = str_replace(['<>', '<', '>', '!', '='],
 					['$ne', '$lt', '$gt', '$n', 'e'], $match[0]);
-				$var = [$opr => (strtolower($var) == 'null') ? null :
+				$var = [$opr => (is_string($var) && strtolower($var) == 'null') ? null :
 						(is_object($var) ? $var : (is_numeric($var) ? $var + 0 : $var))];
 			}
 			return [$key => $var];

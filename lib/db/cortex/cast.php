@@ -87,6 +87,17 @@ trait CastTrait {
 							elseif ($this->fieldConf[$key]['type'] == self::DT_JSON)
 								$val=json_decode($mp->mapper->{$key}?:'', true);
 						}
+						elseif ($this->dbsType == 'mongo') {
+							$ftype = $this->fieldConf[$key]['type'];
+							if ($ftype == self::DT_JSON || $ftype == self::DT_SERIALIZED) {
+								if (is_string($val))
+									$val = ($ftype == self::DT_JSON)
+										? json_decode($val ?: '', true)
+										: unserialize($val ?: '', ['allowed_classes' => false]);
+								elseif (is_object($val) && ($val instanceof \ArrayObject))
+									$val = json_decode(json_encode($val), true);
+							}
+						}
 						if ($this->exists($key)
 							&& preg_match('/BOOL/i',$this->fieldConf[$key]['type'])) {
 							$field_val = $mp->mapper->{$key};
@@ -330,6 +341,8 @@ trait CastTrait {
 	 * @return bool|mixed
 	 */
 	function cleared($key) {
+		if (!method_exists($this->mapper, 'schema'))
+			return false;
 		$fields = $this->mapper->schema();
 		if (!empty($fields[$key]['initial']) && empty($fields[$key]['value']))
 			return $this->initial($key);
@@ -342,6 +355,8 @@ trait CastTrait {
 	 * @return mixed
 	 */
 	function initial($key) {
+		if (!method_exists($this->mapper, 'schema'))
+			return null;
 		$fields = $this->mapper->schema();
 		if (!empty($fields[$key]['initial'])) {
 			if ($this->fieldConf[$key]['type'] == self::DT_JSON)
@@ -349,7 +364,7 @@ trait CastTrait {
 			elseif ($this->fieldConf[$key]['type'] == self::DT_SERIALIZED)
 				return unserialize($fields[$key]['initial'], ['allowed_classes' => false]);
 		}
-		return $fields[$key]['initial'];
+		return $fields[$key]['initial'] ?? null;
 	}
 
 	/**

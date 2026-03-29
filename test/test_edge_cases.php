@@ -585,8 +585,9 @@ class Test_EdgeCases {
 		);
 
 		// ====================================================================
-		// 29. CortexQueryParser - NULL handling at parser level
+		// 29-31. CortexQueryParser SQL-specific NULL handling tests — SQL-only
 		// ====================================================================
+		if (str_contains($type, 'sql')) {
 		$qp = \DB\CortexQueryParser::instance();
 
 		// double-equals variant
@@ -651,6 +652,7 @@ class Test_EdgeCases {
 			is_array($f8) && count($f8) == 1,
 			$type.': prepareFilter compound [a=null AND b=null] - 0 bind params'
 		);
+		} // end SQL-only parser tests
 
 		// ====================================================================
 		// CLEANUP

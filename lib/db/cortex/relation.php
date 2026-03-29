@@ -367,7 +367,7 @@ trait RelationTrait {
 							$this->whitelist[] = $alias;
 					} else {
 						// count rel
-						$this->countFields[]=$key;
+							$this->countFields[]=[$key,$alias];
 					}
 				} elseif($this->fieldConf[$key]['has-many']['hasRel']=='belongs-to-one') {
 					// many-to-one
@@ -392,7 +392,7 @@ trait RelationTrait {
 							$this->whitelist[] = $alias;
 					} else {
 						// count rel
-						$this->countFields[]=$key;
+						$this->countFields[]=[$key,$alias];
 					}
 				}
 			}

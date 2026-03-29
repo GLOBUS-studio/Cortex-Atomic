@@ -29,8 +29,9 @@ trait CrudTrait {
 		if ($this->dbsType!='sql') {
 			// see if reordering is needed
 			foreach($this->countFields?:[] as $counter) {
+				$cKey = is_array($counter) ? $counter[1] : 'count_'.$counter;
 				if ($options && isset($options['order']) &&
-					preg_match('/count_'.$counter.'\h+(asc|desc)/i',$options['order'],$match))
+					preg_match('/'.preg_quote($cKey,'/').'\h+(asc|desc)/i',$options['order'],$match))
 					$sort=true;
 			}
 			if ($sort) {
@@ -56,12 +57,15 @@ trait CrudTrait {
 			unset($record);
 		}
 		// add counter for NoSQL engines
-		foreach($this->countFields?:[] as $counter)
+		foreach($this->countFields?:[] as $counter) {
+			$cKey = is_array($counter) ? $counter[0] : $counter;
+			$cAlias = is_array($counter) ? $counter[1] : 'count_'.$counter;
 			foreach($result as &$mapper) {
-				$cr=$mapper->get($counter);
-				$mapper->virtual('count_'.$counter,$cr?count($cr):null);
+				$cr=$mapper->get($cKey);
+				$mapper->virtual($cAlias,$cr?count($cr):null);
 				unset($mapper);
 			}
+		}
 		$cc = new CortexCollection();
 		$cc->setModels($result);
 		if($sort) {

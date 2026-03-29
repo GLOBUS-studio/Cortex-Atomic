@@ -291,8 +291,11 @@ class Test_Collection {
 		$news->reset();
 		$news->load();
 		$c0 = $news->cast(null, 0);
+		$rawAuthorCheck = str_contains($type, 'sql')
+			? (is_int($c0['author']) || $c0['author'] === null)
+			: ($c0['author'] === null || is_string($c0['author']) || $c0['author'] instanceof \MongoDB\BSON\ObjectId);
 		$test->expect(
-			isset($c0['title']) && (is_int($c0['author']) || $c0['author'] === null),
+			isset($c0['title']) && $rawAuthorCheck,
 			$type.': cast(null,0) returns raw values without resolving relations'
 		);
 
@@ -308,8 +311,9 @@ class Test_Collection {
 		);
 
 		// ========================================================================
-		// 22. CortexQueryParser - prepareFilter with SQL
+		// 22-25. CortexQueryParser SQL-specific tests — SQL-only
 		// ========================================================================
+		if (str_contains($type, 'sql')) {
 		$qp = new \DB\CortexQueryParser();
 
 		// basic filter
@@ -380,6 +384,7 @@ class Test_Collection {
 			str_contains($prepended, 'users.name') && str_contains($prepended, 'users.age'),
 			$type.': CortexQueryParser::sql_prependTableToFields() prepends table'
 		);
+		} // end SQL-only parser tests
 
 		// ========================================================================
 		// 26. countRel without filter (basic usage)
@@ -432,14 +437,16 @@ class Test_Collection {
 		);
 
 		// ========================================================================
-		// 29. NewsModel::getBySQL() custom method
+		// 29. NewsModel::getBySQL() custom method (SQL only)
 		// ========================================================================
-		$news->reset();
-		$bySQL = $news->getBySQL('SELECT * FROM news ORDER BY title');
-		$test->expect(
-			$bySQL instanceof \DB\CortexCollection && count($bySQL) > 0,
-			$type.': custom getBySQL() works on model'
-		);
+		if (str_contains($type, 'sql')) {
+			$news->reset();
+			$bySQL = $news->getBySQL('SELECT * FROM news ORDER BY title');
+			$test->expect(
+				$bySQL instanceof \DB\CortexCollection && count($bySQL) > 0,
+				$type.': custom getBySQL() works on model'
+			);
+		}
 
 		// ========================================================================
 		// 30. get with raw=true on relation field
@@ -448,8 +455,11 @@ class Test_Collection {
 		$news->load(['author != ?', NULL]);
 		if (!$news->dry()) {
 			$rawAuthor = $news->get('author', true);
+			$rawCheck = str_contains($type, 'sql')
+				? is_numeric($rawAuthor)
+				: (is_string($rawAuthor) || $rawAuthor instanceof \MongoDB\BSON\ObjectId);
 			$test->expect(
-				is_numeric($rawAuthor),
+				$rawCheck,
 				$type.': get(key, raw=true) returns raw foreign key value'
 			);
 		} else {

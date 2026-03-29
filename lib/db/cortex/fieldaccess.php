@@ -143,6 +143,8 @@ trait FieldAccessTrait {
 	function set($key, $val) {
 		if ($key == '_id' && $this->dbsType == 'sql')
 			$key = $this->primary;
+		elseif ($key == 'id' && $this->dbsType != 'sql')
+			$key = '_id';
 		$fields = $this->fieldConf;
 		unset($this->fieldsCache[$key]);
 		// pre-process if field config available
@@ -356,6 +358,8 @@ trait FieldAccessTrait {
 		$id = $this->primary;
 		if ($key == '_id' && $this->dbsType == 'sql')
 			$key = $id;
+		elseif ($key == 'id' && $this->dbsType != 'sql')
+			$key = '_id';
 		if ($this->whitelist && !in_array($key,$this->whitelist)) {
 			$out = null;
 			return $out;
@@ -549,7 +553,7 @@ trait FieldAccessTrait {
 					$rel = $this->getRelFromConf($relConf,$key);
 					$fkeys = [];
 					foreach ($result as $el)
-						$fkeys[] = (is_int($el)||ctype_digit($el))?(int)$el:(string)$el;
+						$fkeys[] = (is_int($el)||ctype_digit((string)$el))?(int)$el:(string)$el;
 					// if part of a result set
 					if ($cx = $this->getCollection()) {
 						if (!$cx->hasRelSet($key)) {
@@ -640,7 +644,8 @@ trait FieldAccessTrait {
 	 * @return bool
 	 */
 	function exists($key, $relField = false) {
-		if (!$this->dry() && $key == '_id') return true;
+		if (!$this->dry() && ($key == '_id' || ($key == 'id' && $this->dbsType != 'sql')))
+			return true;
 		return $this->mapper->exists($key) ||
 			($relField && isset($this->fieldConf[$key]['relType']));
 	}

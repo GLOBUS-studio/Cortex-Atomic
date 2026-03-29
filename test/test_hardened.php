@@ -1386,7 +1386,7 @@ class Test_Hardened {
 		// verify that real field names ARE still quoted
 		$qcField = $qp->sql_quoteCondition('username = status', $db);
 		$test->expect(
-			str_contains($qcField, '`username`') && str_contains($qcField, '`status`'),
+			str_contains($qcField, $db->quotekey('username')) && str_contains($qcField, $db->quotekey('status')),
 			$type.': sql_quoteCondition still quotes regular field names'
 		);
 

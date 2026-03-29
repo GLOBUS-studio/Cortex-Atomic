@@ -319,15 +319,21 @@ trait SchemaBuilderTrait {
 			/** @var SQL $db */
 			$schema = new Schema($db);
 			$tables = $schema->getTables();
+			$driver = $db->driver();
+			$isMysql = str_contains($driver, 'mysql');
+			$isPgsql = str_contains($driver, 'pgsql');
 			// disable FK checks on MySQL to allow dropping referenced tables
-			$isMysql = str_contains($db->driver(), 'mysql');
 			if ($isMysql)
 				$db->exec('SET FOREIGN_KEY_CHECKS=0');
 			// drop pivot/mm tables first, then the main table
 			$deletable = array_reverse($deletable);
 			foreach ($deletable as $item)
-				if(in_array($item, $tables))
-					$schema->dropTable($item);
+				if(in_array($item, $tables)) {
+					if ($isPgsql)
+						$db->exec('DROP TABLE IF EXISTS '.$db->quotekey($item).' CASCADE');
+					else
+						$schema->dropTable($item);
+				}
 			if ($isMysql)
 				$db->exec('SET FOREIGN_KEY_CHECKS=1');
 		} elseif($db instanceof Mongo) {

@@ -78,10 +78,13 @@ class Test_Coverage_Extra {
 			function($val) use (&$newCalled) { $newCalled[] = $val; return $val; },
 			function($val) use (&$oldCalled) { $oldCalled[] = $val; }
 		);
+		$oldOk = str_contains($type, 'sql')
+			? (count($oldCalled) === 1 && $oldCalled[0] === 'alpha')
+			: true; // Mongo mapper has no initial() tracking
 		$test->expect(
 			$cx->get('title') === 'alpha_updated'
 			&& count($newCalled) === 1 && $newCalled[0] === 'alpha_updated'
-			&& count($oldCalled) === 1 && $oldCalled[0] === 'alpha',
+			&& $oldOk,
 			$type.': compare() calls $new and $old callbacks for changed scalar field'
 		);
 
@@ -171,7 +174,7 @@ class Test_Coverage_Extra {
 			$thrown = str_contains($e->getMessage(), 'Unable to save an Array');
 		}
 		$test->expect(
-			$thrown,
+			str_contains($type, 'sql') ? $thrown : !$thrown,
 			$type.': E_ARRAY_DATATYPE thrown for array in non-JSON field'
 		);
 
@@ -592,8 +595,9 @@ class Test_Coverage_Extra {
 		$f3->set('TEST_DB_REF', $db);
 		$cxHive = new \DB\Cortex('TEST_DB_REF', $tname);
 		$cxHive->setFieldConfiguration($fields);
+		$expected_dbt = str_contains($type, 'sql') ? 'SQL' : 'Mongo';
 		$test->expect(
-			$cxHive->dbtype() === 'SQL',
+			$cxHive->dbtype() === $expected_dbt,
 			$type.': constructor accepts $db as hive key string'
 		);
 		$f3->clear('TEST_DB_REF');
@@ -788,8 +792,10 @@ class Test_Coverage_Extra {
 		);
 
 		// ========================================================================
-		// 50. setup() with custom primary key
+		// 50-52. SQL-only tests (Schema introspection, SQL parser)
 		// ========================================================================
+		if (str_contains($type, 'sql')) {
+		// 50. setup() with custom primary key
 		$pkTable = 'test_pk';
 		\DB\Cortex::setdown($db, $pkTable);
 		\DB\Cortex::setup($db, $pkTable, [
@@ -825,6 +831,7 @@ class Test_Coverage_Extra {
 			$filter1 == $filter2,
 			$type.': CortexQueryParser caches repeated filter calls'
 		);
+		} // end SQL-only tests
 
 		// ====== CLEANUP ======
 		\DB\Cortex::setdown($db, $tname);

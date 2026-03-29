@@ -39,8 +39,9 @@ class Test_Coverage {
 		// 2. dbtype() - returns DB type string
 		// ========================================================================
 		$dbt = $cx->dbtype();
+		$expected_dbt = str_contains($type, 'sql') ? 'SQL' : 'Mongo';
 		$test->expect(
-			$dbt == 'SQL',
+			$dbt == $expected_dbt,
 			$type.': dbtype() returns correct engine type'
 		);
 
@@ -441,19 +442,21 @@ class Test_Coverage {
 		);
 
 		// ========================================================================
-		// 26. findByRawSQL()
+		// 26. findByRawSQL() — SQL-only
 		// ========================================================================
-		$cx->reset();
-		$results = $cx->findByRawSQL('SELECT * FROM '.$tname.' WHERE title = ?', ['rec_a']);
-		$test->expect(
-			$results instanceof \DB\CortexCollection && count($results) == 1,
-			$type.': findByRawSQL() returns CortexCollection'
-		);
-		$first = $results[0];
-		$test->expect(
-			$first instanceof \DB\Cortex && $first->title == 'rec_a',
-			$type.': findByRawSQL() results are Cortex models'
-		);
+		if (str_contains($type, 'sql')) {
+			$cx->reset();
+			$results = $cx->findByRawSQL('SELECT * FROM '.$tname.' WHERE title = ?', ['rec_a']);
+			$test->expect(
+				$results instanceof \DB\CortexCollection && count($results) == 1,
+				$type.': findByRawSQL() returns CortexCollection'
+			);
+			$first = $results[0];
+			$test->expect(
+				$first instanceof \DB\Cortex && $first->title == 'rec_a',
+				$type.': findByRawSQL() results are Cortex models'
+			);
+		}
 
 		// ========================================================================
 		// 27. named parameter binding (:param syntax)
@@ -503,15 +506,17 @@ class Test_Coverage {
 		);
 
 		// ========================================================================
-		// 31. changed() - detect field value changes
+		// 31. changed() - detect field value changes (SQL-only: Mongo mapper lacks changed())
 		// ========================================================================
-		$cx->reset();
-		$cx->load(['title = ?', 'rec_a']);
-		$cx->title = 'rec_a_modified';
-		$test->expect(
-			$cx->changed('title') !== false,
-			$type.': changed(key) detects modified field'
-		);
+		if (str_contains($type, 'sql')) {
+			$cx->reset();
+			$cx->load(['title = ?', 'rec_a']);
+			$cx->title = 'rec_a_modified';
+			$test->expect(
+				$cx->changed('title') !== false,
+				$type.': changed(key) detects modified field'
+			);
+		}
 
 		// ========================================================================
 		// 32. resetFields() - reset specific fields to defaults

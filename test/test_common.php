@@ -11,7 +11,7 @@ class Test_Common {
 		$f3 = \Base::instance();
 
 		$news = new NewsModel();
-		$news->load();
+		$news->load(null, ['order' => 'id']);
 
 		$dummy = array(
 			'title'=>'copy test',
@@ -30,7 +30,7 @@ class Test_Common {
 		$news->copyto_flat('news');
 
 		$author = new AuthorModel();
-		$author->load();
+		$author->load(null, ['order' => 'id']);
 		$author->copyto_flat('author');
 		$test->expect(
 			is_array($f3->news['tags']) &&
@@ -94,7 +94,7 @@ class Test_Common {
 			'copyfrom: limit fields by callback function'
 		);
 
-		$all = $news->find();
+		$all = $news->find(null,['order'=>'id']);
 		$allTitle = $all->getAll('title');
 
 		$test->expect(
@@ -132,7 +132,7 @@ class Test_Common {
 		);
 
 		$news->reset();
-		$news->load();
+		$news->load(null, ['order' => 'id']);
 		$r = $news->cast(null,0);
 		$test->expect($r['tags2']==null && is_int($r['author']),
 			'simple cast without relations');
@@ -200,13 +200,14 @@ class Test_Common {
 			'merge multiple filters');
 
 		$qp = new \DB\CortexQueryParser();
+		$q = function($s) use($f3) { return $f3->DB->quotekey($s); };
 
 		$test->expect(
-			$qp->prepareFilter(['foo > bar'],'sql', $f3->DB) === ['`foo` > `bar`'],
+			$qp->prepareFilter(['foo > bar'],'sql', $f3->DB) === [$q('foo').' > '.$q('bar')],
 			'auto-escape fields'
 		);
 		$test->expect(
-			$qp->prepareFilter(['created_at > DATE_SUB(NOW(), INTERVAL 1 DAY)'],'sql', $f3->DB) === ['`created_at` > DATE_SUB(NOW(), INTERVAL 1 DAY)'],
+			$qp->prepareFilter(['created_at > DATE_SUB(NOW(), INTERVAL 1 DAY)'],'sql', $f3->DB) === [$q('created_at').' > DATE_SUB(NOW(), INTERVAL 1 DAY)'],
 			'respect function when auto-escaping'
 		);
 		$test->expect(
