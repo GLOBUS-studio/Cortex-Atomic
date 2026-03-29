@@ -1,19 +1,54 @@
-CHANGELOG - Cortex ORM
+CHANGELOG - Cortex-Atomic ORM
+https://github.com/GLOBUS-studio/Cortex-Atomic
+Part of Atomic Framework: https://github.com/MADEVAL/Atomic-Framework
+Based on Cortex by ikkez (Christian Knuth) for Fat-Free Framework.
 
 1.8.0-atomic (29.03.2026)
-*	mod: forked as Cortex-Atomic by GLOBUS studio
+
+  [Fork & Modernization]
+*	forked as Cortex-Atomic by GLOBUS.studio for Atomic Framework
 *	PHP 8.0+ minimum requirement
-*	PHP 8.5 compatible - tested and working
+*	PHP 8.5 compatible — fully tested and working
 *	replaced all is_int(strpos()) with str_contains() (~20 occurrences)
 *	removed deprecated setAccessible() calls (unnecessary since PHP 8.1, deprecated in 8.5)
+
+  [Architecture — Level 1: Class Extraction]
 *	extracted CortexQueryParser into lib/db/cortex/queryparser.php
 *	extracted CortexCollection into lib/db/cortex/collection.php
+
+  [Architecture — Level 3: Trait Decomposition]
+*	extracted SchemaBuilderTrait into lib/db/cortex/schemabuilder.php
+	— setup(), setdown(), resolveConfiguration(), defaults(), dbtype()
+*	extracted CastTrait into lib/db/cortex/cast.php
+	— cast(), castField(), castRow(), fieldConf types DT_JSON / DT_SERIALIZED
+*	extracted FieldAccessTrait into lib/db/cortex/fieldaccess.php
+	— get(), set(), exists(), clear(), fields(), virtual(), copyfrom(), copyto(), copyto_flat()
+*	extracted RelationTrait into lib/db/cortex/relation.php
+	— has(), orHas(), filter(), rel(), countRel(), mergeFilter(), all relation loading
+*	extracted CrudTrait into lib/db/cortex/crud.php
+	— find(), findone(), afind(), findByRawSQL(), load(), save(), erase(), count(), paginate()
+*	cortex.php reduced from ~2800 lines to ~240 lines (thin orchestrator + traits)
+
+  [Bug Fixes]
+*	fixed unserialize(null) deprecation warning in CastTrait (PHP 8.5)
+
+  [Test Suite — 247 Tests]
 *	added CLI test runner (test/run.php) with SQLite backend
+*	test_syntax.php — 19 tests: operators, NULL, IN, LIKE, logical chaining, order/limit
+*	test_relation.php — 29 tests: belongs-to-one, has-one, has-many, m:m, self-ref, erase cascade
+*	test_filter.php — 26 tests: has-filter, pagination, whitelists, countRel, nested has, datetime
+*	test_common.php — 21 tests: copyfrom/copyto, cast depths, collection API, query parser
+*	test_coverage.php — 44 tests: public methods, error paths, event hooks, edge cases
+*	test_collection.php — 32 tests: CortexCollection, castAll, getAll, getBy, orderBy, slice, compare
+*	test_coverage_extra.php — 76 tests: compare(), rel(), countRel, fluid SQL mode, touch(), virtual()
+*	all 247 tests passing on PHP 8.0 — 8.5
+
+  [Project Hygiene]
 *	separated composer.json for library and tests
 *	removed unused test files: bookmodel, productsmodel, newsmodel2, newsmodel.ini
 *	removed legacy web test runner and benchmark (test/app/, test/bench/)
 *	added .gitignore
-*	updated documentation (README)
+*	updated documentation (README, changelog)
 
 1.7.8 (25.02.2025)
 *   fix: php 8.4 deprecations #137

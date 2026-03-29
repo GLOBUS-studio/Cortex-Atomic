@@ -47,11 +47,32 @@ foreach ($dbs as $type => $db) {
     $results = array_merge($results, (array)$test->run($db, $type));
 }
 
+// Test Coverage (basic methods)
+foreach ($dbs as $type => $db) {
+    $f3->set('DB', $db);
+    $test = new \Test_Coverage();
+    $results = array_merge($results, (array)$test->run($db, $type));
+}
+
 // Test Common (needs DB set)
 if (isset($dbs['sql-sqlite'])) {
     $f3->set('DB', $dbs['sql-sqlite']);
     $test = new \Test_Common();
     $results = array_merge($results, (array)$test->run());
+}
+
+// Test Collection & extended coverage
+foreach ($dbs as $type => $db) {
+    $f3->set('DB', $db);
+    $test = new \Test_Collection();
+    $results = array_merge($results, (array)$test->run($db, $type));
+}
+
+// Test Coverage Extra (compare, rel, error paths, events, fluid mode, etc.)
+foreach ($dbs as $type => $db) {
+    $f3->set('DB', $db);
+    $test = new \Test_Coverage_Extra();
+    $results = array_merge($results, (array)$test->run($db, $type));
 }
 
 // Output results

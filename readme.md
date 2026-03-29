@@ -1,6 +1,11 @@
-> **Mod version of Cortex [ikkez/f3-cortex](https://github.com/ikkez/F3-Sugar/tree/master/Cortex).**
-> PHP 8.0-8.5 and Atomic Framework [GLOBUS studio](https://github.com/GLOBUS-studio) or Fat-Free Framework
-> Original author: [Christian Knuth (ikkez)](https://github.com/ikkez).
+# Cortex-Atomic
+
+**A multi-engine ORM / ODM for [Atomic Framework](https://github.com/MADEVAL/Atomic-Framework)**
+Developed and maintained by [GLOBUS.studio](https://github.com/GLOBUS-studio/Cortex-Atomic).
+Based on [Cortex](https://github.com/ikkez/F3-Sugar/tree/master/Cortex) by Christian Knuth (ikkez) for [Fat-Free Framework](https://fatfreeframework.com/).
+
+> PHP 8.0 — 8.5 | SQLite, MySQL, PostgreSQL, SQL Server, MongoDB, Jig
+> 247 tests | GPLv3
 
 ### A multi-engine ORM / ODM - Cortex-Atomic
 
@@ -20,10 +25,18 @@ Cortex is a multi-engine ActiveRecord ORM / ODM that offers easy object persiste
 
 #### Changes from the original Cortex
 
-  - **PHP 8.0+** - minimum requirement, uses `str_contains()`, removed deprecated `setAccessible()` calls
-  - **PHP 8.5 compatible** - tested and working
-  - **File structure** - `CortexQueryParser` and `CortexCollection` extracted into separate files (`lib/db/cortex/`)
-  - **Atomic Framework** - prepared for integration into the Atomic ecosystem
+  - **PHP 8.0+** — minimum requirement, uses `str_contains()`, removed deprecated `setAccessible()` calls
+  - **PHP 8.5 compatible** — fully tested and working (247 tests)
+  - **Trait-based architecture** — Cortex class decomposed into 5 focused traits:
+    - `SchemaBuilderTrait` — table setup/setdown, schema resolution, defaults
+    - `CastTrait` — casting mappers to arrays, field type serialization
+    - `FieldAccessTrait` — get/set, virtual fields, copyfrom/copyto, field whitelists
+    - `RelationTrait` — has/filter, relation loading, countRel, mergeFilter
+    - `CrudTrait` — find, load, save, erase, count, paginate, findByRawSQL
+  - **Extracted classes** — `CortexQueryParser` and `CortexCollection` in separate files (`lib/db/cortex/`)
+  - **247 tests** — comprehensive test suite on SQLite covering all public API, relations, edge cases, events
+  - **Atomic Framework** — prepared for integration into the [Atomic ecosystem](https://github.com/MADEVAL/Atomic-Framework)
+  - **Fat-Free Framework** — fully compatible with F3 3.9.x as standalone ORM
 
 
 ---
@@ -2062,28 +2075,34 @@ php test/run.php
 
 Tests run against SQLite (no external DB server required). The suite covers:
 
-- **Syntax** (19 tests) - operators, NULL checks, IN, LIKE, logical chaining, order, limit
-- **Relations** (29 tests) - belongs-to-one, has-one, has-many, many-to-many, self-referencing, erase cascade
-- **Filters** (25 tests) - has-filter, pagination, whitelists, countRel, nested has-filter, datetime
-- **Common** (28 tests) - copyfrom/copyto, cast with relation depths, collection API, query parser
+- **Syntax** (19 tests) — operators, NULL checks, IN, LIKE, logical chaining, order, limit
+- **Relations** (29 tests) — belongs-to-one, has-one, has-many, many-to-many, self-referencing, erase cascade
+- **Filters** (26 tests) — has-filter, pagination, whitelists, countRel, nested has-filter, datetime
+- **Common** (21 tests) — copyfrom/copyto, cast with relation depths, collection API, query parser
+- **Coverage** (44 tests) — public methods, error paths, event hooks, edge cases
+- **Collection** (32 tests) — CortexCollection API: castAll, getAll, getBy, orderBy, slice, compare
+- **Coverage Extra** (76 tests) — compare(), rel(), countRel, fluid SQL mode, touch(), virtual()
 
-**101 tests total**, all passing on PHP 8.0 - 8.5.
+**247 tests total**, all passing on PHP 8.0 — 8.5.
 
 ### File structure
 
 ```
 test/
-├── composer.json        # test dependencies (F3 3.9.2 + schema-builder)
-├── run.php              # CLI test runner
-├── test_syntax.php      # SQL/Jig/Mongo query syntax tests
-├── test_relation.php    # relation CRUD tests
-├── test_filter.php      # advanced filter & aggregation tests
-├── test_common.php      # casting, collection, misc tests
-├── authormodel.php      # test model: Author (has-many News, has-one Profile)
-├── newsmodel.php        # test model: News (belongs-to-one Author, belongs-to-many Tags)
-├── tagmodel.php         # test model: Tag (has-many News via m:m)
-├── profilemodel.php     # test model: Profile (belongs-to-one Author)
-└── ...
+├── composer.json           # test dependencies (F3 3.9.2 + schema-builder)
+├── run.php                 # CLI test runner
+├── test_syntax.php         # SQL/Jig/Mongo query syntax tests
+├── test_relation.php       # relation CRUD tests
+├── test_filter.php         # advanced filter & aggregation tests
+├── test_common.php         # casting, collection, misc tests
+├── test_coverage.php       # public API coverage tests
+├── test_collection.php     # CortexCollection tests
+├── test_coverage_extra.php # edge cases, fluid mode, events, virtual fields
+├── authormodel.php         # test model: Author (has-many News, has-one Profile)
+├── newsmodel.php           # test model: News (belongs-to-one Author, belongs-to-many Tags)
+├── tagmodel.php            # test model: Tag (has-many News via m:m)
+├── profilemodel.php        # test model: Profile (belongs-to-one Author)
+└── data/                   # SQLite database (auto-created)
 ```
 
 
@@ -2095,4 +2114,10 @@ If you find any issues or bugs, please file a [new Issue](https://github.com/GLO
 
 ## License
 
-GPLv3 - see [LICENSE](LICENSE)
+GPLv3 — see [LICENSE](LICENSE)
+
+---
+
+**Cortex-Atomic** © 2025–2026 [GLOBUS.studio](https://github.com/GLOBUS-studio)
+Part of [Atomic Framework](https://github.com/MADEVAL/Atomic-Framework)
+Original Cortex © Christian Knuth ([ikkez](https://github.com/ikkez)) for [Fat-Free Framework](https://fatfreeframework.com/)
