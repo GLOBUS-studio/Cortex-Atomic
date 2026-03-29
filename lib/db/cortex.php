@@ -16,7 +16,7 @@
  *  can be waived if you get permission from the copyright holder.
  *
  *  @package DB
- *  @version 1.8.3-atomic
+ *  @version 1.8.4-atomic
  *  @date 30.03.2026
  *  @since 22.01.2013
  */
@@ -59,6 +59,7 @@ class Cortex extends Cursor {
 		$hasCond,       // IDs of records the next find should have
 		$whitelist,     // restrict to these fields
 		$relWhitelist,  // restrict relations to these fields
+		$eagerLoad,     // relations to eager-load via with()
 		$grp_stack,     // stack of group conditions
 		$countFields,   // relational counter buffer
 		$preBinds,      // bind values to be prepended to $filter
@@ -201,6 +202,27 @@ class Cortex extends Cursor {
 	protected function getCollection() {
 		return ($this->collection && $this->smartLoading)
 			? $this->collection : false;
+	}
+
+	/**
+	 * Declare relations to eager-load on next find() or load().
+	 * Supports dot-notation for nested relations and integer for depth.
+	 *   with(['news', 'news.tags'])  - named relations
+	 *   with(2)                      - all relations to depth 2
+	 *   with('news')                 - single relation (string shorthand)
+	 * @param array|string|int|null $relations
+	 * @return static
+	 */
+	public function with($relations = null): static {
+		if (is_null($relations) || $relations === false)
+			$this->eagerLoad = [];
+		elseif (is_int($relations))
+			$this->eagerLoad = $relations;
+		elseif (is_string($relations))
+			$this->eagerLoad = [$relations];
+		elseif (is_array($relations))
+			$this->eagerLoad = $relations;
+		return $this;
 	}
 
 	/**

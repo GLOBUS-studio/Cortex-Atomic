@@ -47,8 +47,10 @@ trait CrudTrait {
 		}
 		$this->_ttl=$ttl?:$this->rel_ttl;
 		$result = $this->filteredFind($filter,$options,$ttl);
-		if (empty($result))
+		if (empty($result)) {
+			$this->eagerLoad = [];
 			return false;
+		}
 		foreach($result as &$record) {
 			$record = $this->factory($record);
 			unset($record);
@@ -65,6 +67,11 @@ trait CrudTrait {
 		if($sort) {
 			$cc->orderBy($options['order']);
 			$cc->slice($offset ?? 0, $limit ?? NULL);
+		}
+		// eager-load declared relations
+		if (!empty($this->eagerLoad)) {
+			static::resolveEagerLoading($cc, $this->eagerLoad);
+			$this->eagerLoad = [];
 		}
 		$this->clearFilter();
 		return $cc;
@@ -367,6 +374,15 @@ trait CrudTrait {
 		} else
 			$this->mapper->reset();
 		$this->emit('load');
+		// eager-load declared relations for single record
+		if (!empty($this->eagerLoad) && $this->valid()) {
+			$cc = new CortexCollection();
+			$cc->add($this);
+			static::resolveEagerLoading($cc, $this->eagerLoad);
+			$this->eagerLoad = [];
+		} elseif (!empty($this->eagerLoad)) {
+			$this->eagerLoad = [];
+		}
 		return $this->valid();
 	}
 
@@ -592,6 +608,102 @@ trait CrudTrait {
 		}
 		$this->emit('afterupdate');
 		return is_int($res) ? $this : $res;
+	}
+
+	/**
+	 * Resolve eager loading for a collection.
+	 * Supports array of relation paths (dot-notation) or integer depth.
+	 * @param CortexCollection $cc
+	 * @param array|int $relations
+	 */
+	static protected function resolveEagerLoading(CortexCollection $cc, $relations) {
+		if (!count($cc))
+			return;
+		if (is_int($relations)) {
+			static::eagerLoadByDepth($cc, $relations);
+			return;
+		}
+		// build tree from dot-notation paths
+		$tree = [];
+		foreach ((array) $relations as $rel) {
+			$parts = explode('.', $rel);
+			$ref = &$tree;
+			foreach ($parts as $part) {
+				if (!isset($ref[$part]))
+					$ref[$part] = [];
+				$ref = &$ref[$part];
+			}
+			unset($ref);
+		}
+		static::eagerLoadTree($cc, $tree);
+	}
+
+	/**
+	 * Eager-load relations from a tree structure.
+	 * Each key is a relation name, value is a subtree for nested loading.
+	 * @param CortexCollection $cc
+	 * @param array $tree e.g. ['news' => ['tags' => []], 'profile' => []]
+	 */
+	static protected function eagerLoadTree(CortexCollection $cc, array $tree) {
+		if (!count($cc) || empty($tree))
+			return;
+		foreach ($tree as $key => $nested) {
+			$allRelated = [];
+			foreach ($cc as $model) {
+				$val = $model->get($key);
+				if (!empty($nested)) {
+					if ($val instanceof CortexCollection) {
+						foreach ($val as $item)
+							$allRelated[spl_object_id($item)] = $item;
+					} elseif ($val instanceof Cortex) {
+						$allRelated[spl_object_id($val)] = $val;
+					}
+				}
+			}
+			if (!empty($nested) && !empty($allRelated)) {
+				$megaCC = new CortexCollection();
+				$megaCC->setModels(array_values($allRelated));
+				static::eagerLoadTree($megaCC, $nested);
+			}
+		}
+	}
+
+	/**
+	 * Eager-load all relations by depth.
+	 * @param CortexCollection $cc
+	 * @param int $depth 1 = load direct relations, 2 = relations of relations, etc.
+	 */
+	static protected function eagerLoadByDepth(CortexCollection $cc, int $depth) {
+		if ($depth <= 0 || !count($cc))
+			return;
+		$first = $cc[0];
+		$fieldConf = $first->getFieldConfiguration();
+		if (!$fieldConf)
+			return;
+		$relKeys = [];
+		foreach ($fieldConf as $key => $conf)
+			if (is_array($conf)
+				&& preg_grep('/(belongs|has)-(to-)*(one|many)/', array_keys($conf)))
+				$relKeys[] = $key;
+		foreach ($relKeys as $key) {
+			$allRelated = [];
+			foreach ($cc as $model) {
+				$val = $model->get($key);
+				if ($depth > 1) {
+					if ($val instanceof CortexCollection) {
+						foreach ($val as $item)
+							$allRelated[spl_object_id($item)] = $item;
+					} elseif ($val instanceof Cortex) {
+						$allRelated[spl_object_id($val)] = $val;
+					}
+				}
+			}
+			if ($depth > 1 && !empty($allRelated)) {
+				$megaCC = new CortexCollection();
+				$megaCC->setModels(array_values($allRelated));
+				static::eagerLoadByDepth($megaCC, $depth - 1);
+			}
+		}
 	}
 
 }

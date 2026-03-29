@@ -3,6 +3,37 @@ https://github.com/GLOBUS-studio/Cortex-Atomic
 Part of Atomic Framework: https://github.com/MADEVAL/Atomic-Framework
 Based on Cortex by ikkez (Christian Knuth) for Fat-Free Framework.
 
+1.8.4-atomic (30.03.2026)
+
+  [Eager Loading API - with()]
+*	new Cortex::with() method - fluent API for explicit eager loading
+	- with(['news', 'profile']) - named relation list
+	- with('news') - single string shorthand
+	- with(2) - depth-based loading (all relations to N levels)
+	- with(['news', 'news.tags']) - dot-notation for nested relations
+	- with(null) / with(false) - clear pending eager load
+	- auto-clears after find() / load() to prevent accidental reuse
+*	with() + find() - preloads declared relations on the entire collection
+	- leverages existing smart-loading (1 query per relation level)
+	- nested relations use mega-collection pattern for batch efficiency
+*	with() + load() - creates mini-collection for single-record preloading
+	- enables smart-loading on records loaded via load() (not just find())
+*	resolveEagerLoading() - entry point; dispatches to tree or depth mode
+*	eagerLoadTree() - recursive tree walker for dot-notation paths
+*	eagerLoadByDepth() - recursive depth walker; reads fieldConf for relation keys
+*	supports all relation types:
+	- belongs-to-one, has-one, has-many, belongs-to-many (m:m)
+*	integrates with filter() - relation filters applied during eager loading
+
+  [Test Suite - 327 Tests]
+*	added Test_Eager class (23 tests) covering:
+	- fluent chaining, has-many / belongs-to-one / belongs-to-many / has-one
+	- nested dot-notation (news.author, news.tags)
+	- depth-based loading (with(1), with(2))
+	- load() single-record preloading
+	- auto-clear after find/load, empty result handling
+	- filter() integration, null/false reset
+
 1.8.3-atomic (30.03.2026)
 
   [Constraint Adapter - New Module]
