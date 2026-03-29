@@ -696,7 +696,6 @@ class Cortex extends Cursor {
 		if ($this->dbsType == 'sql' && !$count) {
 			$m_refl=new \ReflectionObject($this->mapper);
 			$m_ad_prop=$m_refl->getProperty('adhoc');
-			$m_ad_prop->setAccessible(true);
 			$m_refl_adhoc=$m_ad_prop->getValue($this->mapper);
 			unset($m_ad_prop,$m_refl);
 		}

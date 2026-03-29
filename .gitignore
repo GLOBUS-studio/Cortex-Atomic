@@ -1,0 +1,6 @@
+/vendor/
+/test/vendor/
+/test/data/
+composer.lock
+test/composer.lock
+*.db

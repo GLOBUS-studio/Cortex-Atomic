@@ -1,10 +1,11 @@
 ![Cortex](https://ikkez.de/linked/cortex_icon.png)
 ***
 
-### A general purpose Data-Mapper for the PHP Fat-Free Framework
+> **Mod version of Cortex [ikkez/f3-cortex](https://github.com/ikkez/F3-Sugar/tree/master/Cortex).**
+> PHP 8.0-8.5 and Atomic Framework [GLOBUS studio](https://github.com/GLOBUS-studio) or Fat-Fraa Framework
+> Original author: [Christian Knuth (ikkez)](https://github.com/ikkez).
 
-[![Latest Stable Version](https://poser.pugx.org/ikkez/f3-cortex/v)](https://packagist.org/packages/ikkez/f3-cortex)
-[![Total Downloads](https://poser.pugx.org/ikkez/f3-cortex/downloads)](https://packagist.org/packages/ikkez/f3-cortex)
+### A multi-engine ORM / ODM - Cortex-Atomic
 
 Cortex is a multi-engine ActiveRecord ORM / ODM that offers easy object persistence. Some of its main features are:
 
@@ -20,10 +21,12 @@ Cortex is a multi-engine ActiveRecord ORM / ODM that offers easy object persiste
   - define default values and nullable fields for NoSQL
   - additional [validation plugin](https://github.com/ikkez/f3-validation-engine) available 
 
-With Cortex you can create generic apps, that work with any DB of the users choice, no matter if it's SQlite, PostgreSQL, MongoDB or even none.
-You can also mash-up multiple engines or use them simultaneously.
+#### Changes from the original Cortex
 
-It's great for fast and easy data abstraction and offers a bunch of useful filter possibilities.
+  - **PHP 8.0+** - minimum requirement, uses `str_contains()`, removed deprecated `setAccessible()` calls
+  - **PHP 8.5 compatible** - tested and working
+  - **File structure** - `CortexQueryParser` and `CortexCollection` extracted into separate files (`lib/db/cortex/`)
+  - **Atomic Framework** - prepared for integration into the Atomic ecosystem
 
 
 ---
@@ -61,22 +64,12 @@ It's great for fast and easy data abstraction and offers a bunch of useful filte
 9. [Mapper API](#mapper-api)
 9. [Collection API](#collection-api)
 10. [Additional notes](#additional-notes)
-11. [Known Issues](#known-issues)
-12. [Roadmap](#roadmap)
+11. [Testing](#testing)
+12. [Known Issues](#known-issues)
 13. [License](#license)
     
 
 ## Quick Start
-
-### System Requirements
-
-Cortex requires at least Fat-Free v3.4 and PHP 5.4. For some of the features, it also requires the F3 [SQL Schema Plugin](https://github.com/ikkez/f3-schema-builder/tree/master).
-
-### Install
-
-To install Cortex, just copy the `/lib/db/cortex.php` file into your libs. For the SQL Schema Plugin, copy `lib/db/sql/schema.php` as well.
-
-If you use **composer**, all you need is to run `composer require ikkez/f3-cortex:1.*` and it'll include Cortex and its dependencies into your package.
 
 ### Setup a DB
 
@@ -2051,13 +2044,58 @@ This removes a part from the collection.
 
 	* `CORTEX.quoteConditions`: Default `TRUE`. By default, all field names in where conditions are quoted automatically according to the used database engine. This helps to work around reserved names in SQL. However the detection of fields isn't perfect yet, so in case you want to add the correct backticks or other quotation yourself, set this to `FALSE`.
 
+## Testing
+
+The test suite is located in the `test/` directory with its own `composer.json` for dependencies.
+
+### Setup
+
+```bash
+cd test
+composer install
+```
+
+This installs Fat-Free Framework 3.9.2 and the SQL Schema Plugin into `test/vendor/`.
+
+### Run
+
+```bash
+php test/run.php
+```
+
+Tests run against SQLite (no external DB server required). The suite covers:
+
+- **Syntax** (19 tests) - operators, NULL checks, IN, LIKE, logical chaining, order, limit
+- **Relations** (29 tests) - belongs-to-one, has-one, has-many, many-to-many, self-referencing, erase cascade
+- **Filters** (25 tests) - has-filter, pagination, whitelists, countRel, nested has-filter, datetime
+- **Common** (28 tests) - copyfrom/copyto, cast with relation depths, collection API, query parser
+
+**101 tests total**, all passing on PHP 8.0 - 8.5.
+
+### File structure
+
+```
+test/
+├── composer.json        # test dependencies (F3 3.9.2 + schema-builder)
+├── run.php              # CLI test runner
+├── test_syntax.php      # SQL/Jig/Mongo query syntax tests
+├── test_relation.php    # relation CRUD tests
+├── test_filter.php      # advanced filter & aggregation tests
+├── test_common.php      # casting, collection, misc tests
+├── authormodel.php      # test model: Author (has-many News, has-one Profile)
+├── newsmodel.php        # test model: News (belongs-to-one Author, belongs-to-many Tags)
+├── tagmodel.php         # test model: Tag (has-many News via m:m)
+├── profilemodel.php     # test model: Profile (belongs-to-one Author)
+└── ...
+```
+
+
 ## Known Issues
 
-* Not really a bug, but returned collections (from relations, *find*, or *paginate* method) are not cloneable because they need to keep a unique references to the identity map of its relations. This leads to the point that all containing mappers are not automatically escaped in templates, regardless of the `ESCAPE` setting. Keep in mind to add the `| esc` filter to your tokens.
+* Returned collections (from relations, *find*, or *paginate* method) are not cloneable because they need to keep unique references to the identity map of its relations. This leads to the point that all containing mappers are not automatically escaped in templates, regardless of the `ESCAPE` setting. Keep in mind to add the `| esc` filter to your tokens.
 
-If you find any issues or bugs, please file a [new Issue](https://github.com/ikkez/F3-Sugar/issues) on github or write a mail. Thanks.
+If you find any issues or bugs, please file a [new Issue](https://github.com/GLOBUS-studio/Cortex-Atomic/issues) on GitHub.
 
-License
--
+## License
 
-GPLv3
+GPLv3 - see [LICENSE](LICENSE)

@@ -1,0 +1,12 @@
+{
+    "name": "globus-studio/cortex-atomic-tests",
+    "description": "Test suite for Cortex-Atomic ORM",
+    "autoload": {
+        "classmap": ["./", "../lib/"]
+    },
+    "require": {
+        "php": ">=8.0",
+        "bcosca/fatfree-core": "3.9.2",
+        "ikkez/f3-schema-builder": "2.*"
+    }
+}
