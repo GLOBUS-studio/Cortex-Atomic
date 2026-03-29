@@ -1497,6 +1497,79 @@ class Test_Hardened {
 		);
 
 		// ================================================================
+		// BUG FIX TESTS (v1.8.7)
+		// ================================================================
+
+		// -- B1: orHas() returns $this for method chaining --
+		$chainModel = new \NewsModel();
+		$chainResult = $chainModel->has('author', ['name = ?', 'Alan'])
+			->orHas('author', ['name = ?', 'Bob']);
+		$test->expect(
+			$chainResult instanceof \NewsModel,
+			$type.': orHas() returns $this for method chaining'
+		);
+		// verify chained orHas()->find() works end-to-end
+		$chainedFind = $chainModel->has('author', ['name = ?', 'Alan'])
+			->orHas('author', ['name = ?', 'Bob'])
+			->find();
+		$test->expect(
+			$chainedFind !== false && count($chainedFind) > 0,
+			$type.': orHas()->find() chained call works end-to-end'
+		);
+
+		// -- B2: erase($filter) cleans m:m pivot and uses transaction --
+		// create a fresh author with news and tags (m:m)
+		$b2Author = new \AuthorModel();
+		$b2Author->name = 'EraseFilterTest';
+		$b2Author->save();
+
+		$b2Tag = new \TagModel();
+		$b2Tag->title = 'EraseFilterTag';
+		$b2Tag->save();
+
+		$b2News1 = new \NewsModel();
+		$b2News1->title = 'EraseFilter News 1';
+		$b2News1->author = $b2Author->_id;
+		$b2News1->tags2 = [$b2Tag->_id];
+		$b2News1->save();
+
+		$b2News2 = new \NewsModel();
+		$b2News2->title = 'EraseFilter News 2';
+		$b2News2->author = $b2Author->_id;
+		$b2News2->tags2 = [$b2Tag->_id];
+		$b2News2->save();
+
+		$n1id = $b2News1->_id;
+		$n2id = $b2News2->_id;
+
+		// check pivot rows exist before erase
+		$pivotTable = 'news_tags';
+		$pivotBefore = $db->exec("SELECT COUNT(*) AS cnt FROM \"{$pivotTable}\" WHERE neeeews IN (?,?)", [$n1id, $n2id]);
+		$pivotBeforeCount = (int)$pivotBefore[0]['cnt'];
+
+		// erase with filter - should clean m:m pivot entries
+		$eraser = new \NewsModel();
+		$eraser->erase(['title LIKE ?', 'EraseFilter News%']);
+
+		// verify news records are gone
+		$checkNews = new \NewsModel();
+		$checkNews->load(['title LIKE ?', 'EraseFilter News%']);
+		$newsGone = $checkNews->dry();
+
+		// verify pivot rows are cleaned
+		$pivotAfter = $db->exec("SELECT COUNT(*) AS cnt FROM \"{$pivotTable}\" WHERE neeeews IN (?,?)", [$n1id, $n2id]);
+		$pivotAfterCount = (int)$pivotAfter[0]['cnt'];
+
+		$test->expect(
+			$pivotBeforeCount >= 2 && $newsGone && $pivotAfterCount === 0,
+			$type.': erase($filter) cleans m:m pivot entries (had '.$pivotBeforeCount.' pivot rows, now '.$pivotAfterCount.')'
+		);
+
+		// cleanup
+		$b2Tag->erase();
+		$b2Author->erase();
+
+		// ================================================================
 		// CLEANUP
 		// ================================================================
 		\NewsModel::setdown();

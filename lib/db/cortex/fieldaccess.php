@@ -255,7 +255,6 @@ trait FieldAccessTrait {
 				if (isset($this->fieldConf[$key]) && isset($this->fieldConf[$key]['type']))
 					$type = $this->fieldConf[$key]['type'];
 				elseif (is_int($val)) $type = $schema::DT_INT;
-				elseif (is_double($val)) $type = $schema::DT_DOUBLE;
 				elseif (is_float($val)) $type = $schema::DT_FLOAT;
 				elseif (is_bool($val)) $type = $schema::DT_BOOLEAN;
 				elseif (strlen($val)>10 && strtotime($val)) $type = $schema::DT_DATETIME;

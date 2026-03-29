@@ -444,8 +444,41 @@ trait CrudTrait {
 				throw $e;
 			}
 			$this->emit('aftererase');
-		} else
-			$this->mapper->erase($filter);
+		} else {
+			// check if this model has m:m relations that need pivot cleanup
+			$hasMMRels = false;
+			if ($this->fieldConf) {
+				foreach ($this->fieldConf as $conf)
+					if (isset($conf['has-many']) &&
+						$conf['has-many']['hasRel']=='has-many') {
+						$hasMMRels = true;
+						break;
+					}
+			}
+			if (!$hasMMRels) {
+				// no m:m relations - safe to batch-erase directly
+				$this->mapper->erase($filter);
+			} else {
+				// has m:m relations: load each record and erase individually
+				// to ensure pivot cleanup and transaction safety
+				$needsTx = $this->dbsType == 'sql' && !$this->db->trans();
+				if ($needsTx)
+					$this->db->begin();
+				try {
+					$clone = clone($this);
+					while ($clone->load($filter)) {
+						$clone->erase();
+						$clone->reset();
+					}
+					if ($needsTx)
+						$this->db->commit();
+				} catch (\Exception $e) {
+					if ($needsTx)
+						$this->db->rollback();
+					throw $e;
+				}
+			}
+		}
 		return true;
 	}
 

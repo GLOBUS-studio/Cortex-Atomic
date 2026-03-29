@@ -60,7 +60,7 @@ trait RelationTrait {
 		if (!$options)
 			$options=[];
 		$options['OR'] = TRUE;
-		$this->has($key, $filter, $options);
+		return $this->has($key, $filter, $options);
 	}
 
 	/**

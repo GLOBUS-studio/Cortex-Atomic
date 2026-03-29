@@ -3,6 +3,28 @@ https://github.com/GLOBUS-studio/Cortex-Atomic
 Part of Atomic Framework: https://github.com/MADEVAL/Atomic-Framework
 Based on Cortex by ikkez (Christian Knuth) for Fat-Free Framework.
 
+1.8.7-atomic (29.03.2026)
+
+  [Bug Fixes]
+*	fixed orHas() not returning $this - broke method chaining
+	- $model->has(...)->orHas(...)->find() now works correctly
+	- orHas() returns result of has() call (which returns $this)
+*	fixed erase($filter) not cleaning m:m pivot table entries
+	- erase() with a filter argument now loads each matching record
+	  and erases individually, triggering full m:m pivot cleanup
+	- wrapped in transaction for atomicity (SQL engine)
+	- models without m:m relations still use efficient batch erase
+*	fixed is_double() deprecation (PHP 8.0+)
+	- replaced with is_float() in fluid SQL schema type detection
+	- removed dead code (is_double and is_float are aliases, second branch
+	  was unreachable)
+
+  [Test Suite - 487 Tests]
+*	added 3 new tests in Test_Hardened:
+	- orHas() returns $this for method chaining
+	- orHas()->find() chained call works end-to-end
+	- erase($filter) cleans m:m pivot entries (verifies pivot row count)
+
 1.8.6-atomic (29.03.2026)
 
   [Bug Fixes]
