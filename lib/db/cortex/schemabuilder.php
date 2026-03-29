@@ -62,6 +62,9 @@ trait SchemaBuilderTrait {
 				$fields = [];
 		if ($db instanceof SQL) {
 			$schema = new Schema($db);
+			Cortex\ConstraintAdapter::enableForeignKeys($db);
+			$belongsToFK = []; // collect belongs-to-one for FK after table build
+			$pendingPivots = []; // collect m:m pivot info for deferred creation
 			// prepare field configuration
 			foreach($fields as $key => &$field) {
 				// fetch relation field types
@@ -82,19 +85,38 @@ trait SchemaBuilderTrait {
 									$table, $key, $rel['fieldConf'][$relConf[1]]['has-many']);
 							if (!in_array($mmTable,$schema->getTables())) {
 								$toConf = $relConf[0]::resolveRelationConf($rel['fieldConf'][$relConf[1]]);
-								$mmt = $schema->createTable($mmTable);
 								$relField = $relConf['isSelf']?$relConf['selfRefField']:$relConf['relField'];
-								$mmt->addColumn($relField)->type($relConf['relFieldType']);
-								$mmt->addColumn($toConf['has-many']['relField'])->type($field['type']);
-								$index = [$relField,$toConf['has-many']['relField']];
-								sort($index);
-								$mmt->addIndex($index);
-								$mmt->build();
+								$col2Name = $toConf['has-many']['relField'];
+								$ownPrimary = isset($df) ? $df['primary'] : 'id';
+								// defer pivot creation until after main table build
+								$pendingPivots[] = [
+									'mmTable' => $mmTable,
+									'relField' => $relField,
+									'relFieldType' => $relConf['relFieldType'],
+									'relTable' => $rel['table'],
+									'relPrimary' => $rel['primary'],
+									'col2Name' => $col2Name,
+									'col2Type' => $field['type'],
+									'ownPrimary' => $ownPrimary,
+								];
 							}
 						}
 					}
 					unset($fields[$key]);
 					continue;
+				}
+				// collect belongs-to-one FK info
+				if (isset($field['relType']) && $field['relType'] == 'belongs-to-one') {
+					$btoConf = $field['belongs-to-one'];
+					if (!is_array($btoConf))
+						$btoConf = [$btoConf, '_id'];
+					$btoRefConf = $btoConf[0]::resolveConfiguration();
+					$btoRefCol = ($btoConf[1] == '_id')
+						? $btoRefConf['primary'] : $btoConf[1];
+					$belongsToFK[$key] = [
+						'table' => $btoRefConf['table'],
+						'column' => $btoRefCol,
+					];
 				}
 				// skip virtual fields with no type
 				if (!array_key_exists('type', $field)) {
@@ -109,6 +131,7 @@ trait SchemaBuilderTrait {
 					$field['nullable'] = true;
 				unset($field);
 			}
+			$tableName = $table; // save before reassignment
 			if (!in_array($table, $schema->getTables())) {
 				// create table
 				$table = $schema->createTable($table);
@@ -133,6 +156,119 @@ trait SchemaBuilderTrait {
 				//     if (!in_array($col, array_keys($fields)) && $col!='id')
 				//     $table->dropColumn($col);
 				$table->build();
+			}
+			// create deferred pivot tables (after main table exists)
+			foreach ($pendingPivots as $pv) {
+				$canAddFK = in_array($pv['relTable'], $schema->getTables())
+					&& in_array($tableName, $schema->getTables());
+				if ($canAddFK) {
+					Cortex\ConstraintAdapter::createPivotTable(
+						$db, $pv['mmTable'],
+						$pv['relField'], $pv['relFieldType'],
+						$pv['relTable'], $pv['relPrimary'],
+						$pv['col2Name'], $pv['col2Type'],
+						$tableName, $pv['ownPrimary'],
+						'CASCADE'
+					);
+				} else {
+					// fallback: create without FK, but with UNIQUE
+					$mmt = $schema->createTable($pv['mmTable']);
+					$mmt->addColumn($pv['relField'])->type($pv['relFieldType']);
+					$mmt->addColumn($pv['col2Name'])->type($pv['col2Type']);
+					$index = [$pv['relField'], $pv['col2Name']];
+					sort($index);
+					$mmt->addIndex($index, true);
+					$mmt->build();
+				}
+			}
+			// add belongs-to-one FK constraints (skipped on SQLite)
+			foreach ($belongsToFK as $col => $ref) {
+				if (in_array($ref['table'], $schema->getTables()))
+					Cortex\ConstraintAdapter::addBelongsToForeignKey(
+						$db, $tableName, $col,
+						$ref['table'], $ref['column'], 'SET NULL'
+					);
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Add FK constraints for this model's relations.
+	 * Call AFTER all related models have been setup().
+	 * Handles m:m pivots (recreates on SQLite) and belongs-to-one.
+	 * @static
+	 * @param SQL|null $db
+	 * @param string|null $table
+	 * @param array|null $fields
+	 * @return bool
+	 */
+	static public function setupForeignKeys($db=null, $table=null, $fields=null) {
+		$self = get_called_class();
+		if (is_null($db) || is_null($table) || is_null($fields))
+			$df = $self::resolveConfiguration();
+		if (!is_object($db=(is_string($db=($db?:$df['db']))?\Base::instance()->get($db):$db)))
+			throw new \Exception(self::E_CONNECTION);
+		if (strlen($table=$table?:$df['table'])==0)
+			throw new \Exception(self::E_NO_TABLE);
+		if (is_null($fields))
+			if (!empty($df['fieldConf']))
+				$fields = $df['fieldConf'];
+			else
+				$fields = [];
+		if (!($db instanceof SQL))
+			return false;
+		$schema = new Schema($db);
+		Cortex\ConstraintAdapter::enableForeignKeys($db);
+		$ownPrimary = isset($df) ? $df['primary'] : 'id';
+		foreach ($fields as $key => $field) {
+			$field = static::resolveRelationConf($field);
+			// m:m pivot FK
+			if (array_key_exists('has-many', $field) && is_array($relConf = $field['has-many'])) {
+				$rel = $relConf[0]::resolveConfiguration();
+				if (!is_null($relConf[1])
+					&& array_key_exists($relConf[1],$rel['fieldConf'])
+					&& !is_null($rel['fieldConf'][$relConf[1]])
+					&& $relConf['hasRel'] == 'has-many') {
+					$mmTable = isset($relConf[2]) ? $relConf[2] :
+						static::getMMTableName($rel['table'], $relConf['relField'],
+							$table, $key, $rel['fieldConf'][$relConf[1]]['has-many']);
+					if (in_array($mmTable, $schema->getTables())
+						&& in_array($rel['table'], $schema->getTables())
+						&& in_array($table, $schema->getTables())) {
+						$toConf = $relConf[0]::resolveRelationConf($rel['fieldConf'][$relConf[1]]);
+						$relField = $relConf['isSelf']?$relConf['selfRefField']:$relConf['relField'];
+						$col2Name = $toConf['has-many']['relField'];
+						// check if FK already exists
+						if (!Cortex\ConstraintAdapter::hasForeignKey($db, $mmTable, $relField)) {
+							Cortex\ConstraintAdapter::recreatePivotWithFK(
+								$db, $mmTable,
+								$relField, $relConf['relFieldType'],
+								$rel['table'], $rel['primary'],
+								$col2Name, $field['type'] ?? Schema::DT_INT,
+								$table, $ownPrimary,
+								'CASCADE'
+							);
+						}
+					}
+				}
+			}
+			// belongs-to-one FK
+			elseif (array_key_exists('belongs-to-one', $field)) {
+				$btoConf = $field['belongs-to-one'];
+				if (!is_array($btoConf))
+					$btoConf = [$btoConf, '_id'];
+				$btoRefConf = $btoConf[0]::resolveConfiguration();
+				$btoRefCol = ($btoConf[1] == '_id')
+					? $btoRefConf['primary'] : $btoConf[1];
+				if (in_array($btoRefConf['table'], $schema->getTables())
+					&& in_array($table, $schema->getTables())) {
+					if (!Cortex\ConstraintAdapter::hasForeignKey($db, $table, $key))
+						Cortex\ConstraintAdapter::addBelongsToForeignKey(
+							$db, $table, $key,
+							$btoRefConf['table'], $btoRefCol, 'SET NULL'
+						);
+				}
 			}
 		}
 		return true;

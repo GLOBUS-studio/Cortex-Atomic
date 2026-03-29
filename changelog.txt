@@ -3,6 +3,66 @@ https://github.com/GLOBUS-studio/Cortex-Atomic
 Part of Atomic Framework: https://github.com/MADEVAL/Atomic-Framework
 Based on Cortex by ikkez (Christian Knuth) for Fat-Free Framework.
 
+1.8.3-atomic (30.03.2026)
+
+  [Constraint Adapter - New Module]
+*	new ConstraintAdapter class (lib/db/cortex/constraintadapter.php)
+	- adapter layer for FK constraints and UNIQUE composite indexes
+	- future-proof design: checks for native schema-builder FK support first,
+	  falls back to raw SQL per dialect (MySQL, PostgreSQL, SQLite, MSSQL)
+	- when schema-builder is forked and updated with native addForeignKey(),
+	  the adapter will automatically use the native method
+
+  [FK Constraints]
+*	enableForeignKeys() - sets PRAGMA foreign_keys=ON for SQLite per connection
+*	addForeignKey() - ALTER TABLE based FK for MySQL/PostgreSQL/MSSQL
+	- returns false on SQLite (ALTER TABLE ADD CONSTRAINT not supported)
+*	foreignKeyClause() - generates inline FK SQL fragment for CREATE TABLE
+*	createPivotTable() - creates m:m pivot table with inline FK (SQLite)
+	or schema-builder + ALTER TABLE (other engines)
+*	recreatePivotWithFK() - adds FK to existing pivot tables
+	- SQLite: recreates table via temp table + data copy + rename pattern
+	- non-SQLite: ALTER TABLE ADD CONSTRAINT
+*	addBelongsToForeignKey() - FK for belongs-to-one relations (SET NULL default)
+*	hasForeignKey() - introspection via PRAGMA foreign_key_list (SQLite),
+	INFORMATION_SCHEMA (MySQL/PostgreSQL)
+
+  [UNIQUE Composite Indexes]
+*	addUniqueComposite() - uses schema-builder addIndex with unique=true
+*	hasIndex() - introspection of composite indexes via PRAGMA index_list/index_info
+	(SQLite), SHOW INDEX (MySQL)
+*	all m:m pivot tables now get UNIQUE composite index on the two FK columns
+	- prevents duplicate relation entries at the database level
+
+  [Schema Builder Integration]
+*	setup() refactored with deferred pivot creation
+	- pivot tables created after main table build (not during field loop)
+	- enables FK when both referenced tables exist at setup time
+	- belongs-to-one FK added after table build (non-SQLite)
+*	new setupForeignKeys() static method - two-pass FK approach
+	- call after all related models have been setup()
+	- handles m:m pivot FK ordering (chicken-and-egg problem)
+	- handles belongs-to-one FK for cross-model references
+	- idempotent - checks hasForeignKey() before adding
+
+  [Test Suite - 293 Tests]
+*	added Test_Constraints class (24 tests) covering:
+	- enableForeignKeys() PRAGMA verification
+	- createPivotTable() with UNIQUE + FK
+	- hasIndex() and hasForeignKey() introspection
+	- UNIQUE constraint rejects duplicate pivot entries
+	- FK CASCADE deletes pivot entries when parent is removed
+	- FK prevents orphan pivot entries
+	- createPivotTable() idempotent (returns false if table exists)
+	- addUniqueComposite() on existing table
+	- addForeignKey() via ALTER TABLE (non-SQLite) / skipped on SQLite
+	- addBelongsToForeignKey() alias
+	- foreignKeyClause() SQL fragment generation
+	- hasIndex() / addUniqueComposite() on non-existent table
+	- Cortex::setup() + setupForeignKeys() integration (pivot UNIQUE + FK)
+	- FK enforcement on Cortex pivot tables
+	- self-referencing m:m (friends) FK constraints
+
 1.8.2-atomic (29.03.2026)
 
   [Transactions]

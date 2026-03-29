@@ -82,6 +82,13 @@ foreach ($dbs as $type => $db) {
     $results = array_merge($results, (array)$test->run($db, $type));
 }
 
+// Test Constraints (UNIQUE, FK, ConstraintAdapter)
+foreach ($dbs as $type => $db) {
+    $f3->set('DB', $db);
+    $test = new \Test_Constraints();
+    $results = array_merge($results, (array)$test->run($db, $type));
+}
+
 // Output results
 echo str_repeat('=', 70).PHP_EOL;
 echo "  CORTEX-ATOMIC TEST RESULTS".PHP_EOL;
