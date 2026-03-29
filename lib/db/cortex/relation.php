@@ -230,6 +230,55 @@ trait RelationTrait {
 	}
 
 	/**
+	 * build EXISTS sub-query for belongs-to-many (JSON-stored IDs) on SQL
+	 * @param string $key field name containing JSON array of foreign IDs
+	 * @param array $hasCond [filter, options]
+	 * @return array [conditionString, ...args] to merge into main filter
+	 */
+	protected function _hasBTM_sql($key, $hasCond) {
+		$relConf = $this->fieldConf[$key]['belongs-to-many'];
+		$rel = $this->getRelFromConf($relConf,$key);
+		$relTable = $rel->getTable();
+		$relPK = $rel->primary;
+		$driver = $this->db->driver();
+		$qKey = $this->db->quotekey($this->table).'.'.$this->db->quotekey($key);
+		$qRelTable = $this->db->quotekey($relTable);
+		$qRelPK = $this->db->quotekey($relPK);
+		// build relation WHERE clause from has-condition
+		$relWhere = '';
+		$relArgs = [];
+		if (!empty($hasCond[0])) {
+			$relWhere = $this->queryParser->sql_quoteCondition($hasCond[0][0],$this->db);
+			$relWhere = $this->queryParser->sql_prependTableToFields($relWhere,'__btm_r');
+			$relArgs = array_slice($hasCond[0],1);
+		}
+		$alias_r = $this->db->quotekey('__btm_r');
+		if (str_contains($driver,'sqlite')) {
+			// SQLite 3.9+ json_each()
+			$exists = 'EXISTS(SELECT 1 FROM json_each('.$qKey.') __btm_je'
+				.','.$qRelTable.' '.$alias_r
+				.' WHERE '.$alias_r.'.'.$qRelPK.'=__btm_je.value'
+				.($relWhere?' AND ('.$relWhere.')':'').')';
+		} elseif ($driver=='mysql') {
+			// MySQL 5.7+ JSON_CONTAINS()
+			$exists = 'EXISTS(SELECT 1 FROM '.$qRelTable.' '.$alias_r
+				.' WHERE JSON_CONTAINS('.$qKey.',CAST('.$alias_r.'.'.$qRelPK.' AS JSON))'
+				.($relWhere?' AND ('.$relWhere.')':'').')';
+		} elseif ($driver=='pgsql') {
+			// PostgreSQL json_array_elements_text()
+			// use CAST() instead of :: to avoid confusing named-param parser
+			$exists = 'EXISTS(SELECT 1 FROM '.$qRelTable.' '.$alias_r
+				.',json_array_elements_text(CAST('.$qKey.' AS json)) __btm_je'
+				.' WHERE CAST('.$alias_r.'.'.$qRelPK.' AS text)=__btm_je'
+				.($relWhere?' AND ('.$relWhere.')':'').')';
+		} else {
+			// unsupported driver — fallback signal
+			return false;
+		}
+		return array_merge([$exists],$relArgs);
+	}
+
+	/**
 	 * add filter for loading related models
 	 * @param string $key
 	 * @param array $filter

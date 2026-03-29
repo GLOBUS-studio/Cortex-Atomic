@@ -210,25 +210,32 @@ trait CrudTrait {
 						break;
 					// unidirectional m:m (JSON-stored IDs)
 					case 'belongs-to-many':
-						$relConf = $this->fieldConf[$key]['belongs-to-many'];
-						$rel = $this->getRelFromConf($relConf,$key);
-						$hasSet = $rel->find($has_filter,$has_options,$ttl);
-						if ($hasSet) {
-							$relField = is_array($relConf) ? $relConf[1] : '_id';
-							$matchIDs = array_unique($hasSet->getAll($relField, true));
-							// scan own records for JSON arrays containing these IDs
-							$allOwn = $this->mapper->find(null,null,$ttl);
-							$ownIDs = [];
-							if ($allOwn) foreach ($allOwn as $own) {
-								$raw = $own->get($key);
-								$arr = is_string($raw) ? json_decode($raw ?: '', true) : $raw;
-								if (is_array($arr) && array_intersect($arr, $matchIDs))
-									$ownIDs[] = $own->get($this->primary);
+						if (!$deep && $this->dbsType == 'sql'
+							&& ($btmSql = $this->_hasBTM_sql($key,$hasCond)) !== false) {
+							// native JSON query — no full table scan
+							$addToFilter = $btmSql;
+						} else {
+							// Mongo / Jig / unsupported SQL driver: PHP-based scan fallback
+							$relConf = $this->fieldConf[$key]['belongs-to-many'];
+							$rel = $this->getRelFromConf($relConf,$key);
+							$hasSet = $rel->find($has_filter,$has_options,$ttl);
+							if ($hasSet) {
+								$relField = is_array($relConf) ? $relConf[1] : '_id';
+								$matchIDs = array_unique($hasSet->getAll($relField, true));
+								// scan own records for JSON arrays containing these IDs
+								$allOwn = $this->mapper->find(null,null,$ttl);
+								$ownIDs = [];
+								if ($allOwn) foreach ($allOwn as $own) {
+									$raw = $own->get($key);
+									$arr = is_string($raw) ? json_decode($raw ?: '', true) : $raw;
+									if (is_array($arr) && array_intersect($arr, $matchIDs))
+										$ownIDs[] = $own->get($this->primary);
+								}
+								if (!empty($ownIDs))
+									$addToFilter = [$this->primary.' IN ?', array_unique($ownIDs)];
+								else
+									$result = true; // mark as resolved but empty
 							}
-							if (!empty($ownIDs))
-								$addToFilter = [$this->primary.' IN ?', array_unique($ownIDs)];
-							else
-								$result = true; // mark as resolved but empty
 						}
 						break;
 					default:

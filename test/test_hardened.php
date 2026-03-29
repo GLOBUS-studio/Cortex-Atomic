@@ -1240,21 +1240,115 @@ class Test_Hardened {
 		);
 
 		// ================================================================
-		// 72. WEAKNESS PROBE: has() on belongs-to-many (unidirectional m:m)
+		// 72. has() on belongs-to-many — basic filter
 		// ================================================================
 		$n72 = new \NewsModel();
 		$n72->has('tags', ['title = ?', 'PHP']);
-		$weakness72 = false;
-		try {
-			$result72 = $n72->find();
-			$weakness72 = false;
-		} catch (\Exception $e) {
-			$weakness72 = true;
-		}
+		$result72 = $n72->find(null, ['order' => 'title ASC']);
+		$titles72 = [];
+		if ($result72) foreach ($result72 as $r72) $titles72[] = $r72->title;
+		// Expected: articles that have 'PHP' tag (at this point in test):
+		// Second Post [PHP], Third Post [PHP,SQL] (set in test 68),
+		// Long Post [PHP,SQL,Security], Grace Review [PHP,JS,SQL]
+		// Diana Deep was erased in test 5, First Post cleared in test 10
 		$test->expect(
-			!$weakness72,
-			$type.': WEAKNESS PROBE - has() on belongs-to-many does not crash [bug if FAIL]'
+			in_array('Second Post', $titles72) && in_array('Third Post', $titles72)
+				&& in_array('Long Post', $titles72)
+				&& in_array('Grace Review', $titles72)
+				&& count($titles72) == 4
+				&& !in_array('First Post', $titles72)
+				&& !in_array('Diana Deep', $titles72),
+			$type.': has(tags, PHP) returns correct news articles'
 		);
+
+		// ================================================================
+		// 72b. has() on belongs-to-many — combined with user filter
+		// ================================================================
+		$n72b = new \NewsModel();
+		$n72b->has('tags', ['title = ?', 'Security']);
+		$result72b = $n72b->find(['title LIKE ?', '%Post%']);
+		$titles72b = [];
+		if ($result72b) foreach ($result72b as $r) $titles72b[] = $r->title;
+		// Expected: articles matching LIKE '%Post%' AND having 'Security' tag
+		// Long Post [PHP,SQL,Security], Special Chars -> 'O'Reilly...' title has no 'Post'
+		$test->expect(
+			in_array('Long Post', $titles72b)
+				&& !in_array('First Post', $titles72b),
+			$type.': has(tags, Security) combined with title LIKE filter works'
+		);
+
+		// ================================================================
+		// 72c. has() on belongs-to-many — no matching tags → empty result
+		// ================================================================
+		$n72c = new \NewsModel();
+		$n72c->has('tags', ['title = ?', 'NonExistentTag']);
+		$result72c = $n72c->find();
+		$test->expect(
+			$result72c === false || ($result72c instanceof \DB\CortexCollection && count($result72c) == 0),
+			$type.': has(tags, NonExistentTag) returns empty result'
+		);
+
+		// ================================================================
+		// 72d. has() on belongs-to-many — null filter (any tags)
+		// ================================================================
+		$n72d = new \NewsModel();
+		$n72d->has('tags', null);
+		$result72d = $n72d->find();
+		$titles72d = [];
+		if ($result72d) foreach ($result72d as $r) $titles72d[] = $r->title;
+		// After test 5 erased Diana Deep, test 10 cleared First Post, test 68 set Third Post:
+		// With tags: Second Post, Third Post, Fourth Post, Zero Post, Long Post,
+		// Unicode Post, Special Chars, Irene Report, Jack Update, Grace Review = 10
+		// Without: First Post, Orphan Post, Null Text Post, Hank Solo, Mapper Set Test
+		$test->expect(
+			!in_array('First Post', $titles72d)
+				&& !in_array('Orphan Post', $titles72d)
+				&& !in_array('Hank Solo', $titles72d)
+				&& in_array('Third Post', $titles72d)
+				&& in_array('Grace Review', $titles72d)
+				&& count($titles72d) == 10,
+			$type.': has(tags, null) returns only articles with tags'
+		);
+
+		// ================================================================
+		// 72e. has() on belongs-to-many — OR chaining (orHas)
+		// ================================================================
+		$n72e = new \NewsModel();
+		$n72e->has('tags', ['title = ?', 'DevOps']);
+		$n72e->orHas('tags', ['title = ?', 'Performance']);
+		$result72e = $n72e->find(null, ['order' => 'title ASC']);
+		$titles72e = [];
+		if ($result72e) foreach ($result72e as $r) $titles72e[] = $r->title;
+		// DevOps: Zero Post, Jack Update (Diana Deep erased)
+		// Performance: Irene Report (Diana Deep erased)
+		// Union: Irene Report, Jack Update, Zero Post
+		$test->expect(
+			!in_array('Diana Deep', $titles72e)
+				&& in_array('Irene Report', $titles72e)
+				&& in_array('Jack Update', $titles72e)
+				&& in_array('Zero Post', $titles72e)
+				&& !in_array('First Post', $titles72e)
+				&& count($titles72e) == 3,
+			$type.': orHas(tags) with DevOps OR Performance returns correct union'
+		);
+
+		// ================================================================
+		// 72f. has() on BTM combined with has() on different relation
+		// ================================================================
+		if (str_contains($type, 'sql')) {
+			$n72f = new \NewsModel();
+			$n72f->has('tags', ['title = ?', 'PHP']);
+			$n72f->has('author', ['name = ?', 'Eve']);
+			$result72f = $n72f->find();
+			$titles72f = [];
+			if ($result72f) foreach ($result72f as $r) $titles72f[] = $r->title;
+			// Only Eve's articles with PHP tag: Long Post [PHP,SQL,Security] by Eve
+			$test->expect(
+				in_array('Long Post', $titles72f)
+					&& count($titles72f) == 1,
+				$type.': has(tags,PHP) AND has(author,Eve) returns correct intersection'
+			);
+		}
 
 		// ================================================================
 		// 73. countRel on has-many returns count per author
