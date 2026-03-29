@@ -110,6 +110,13 @@ foreach ($dbs as $type => $db) {
     $results = array_merge($results, (array)$test->run($db, $type));
 }
 
+// Test Schema (forked DB\Cortex\Schema classes and backward-compatible alias)
+foreach ($dbs as $type => $db) {
+    $f3->set('DB', $db);
+    $test = new \Test_Schema();
+    $results = array_merge($results, (array)$test->run($db, $type));
+}
+
 // Output results
 echo str_repeat('=', 70).PHP_EOL;
 echo "  CORTEX-ATOMIC TEST RESULTS".PHP_EOL;

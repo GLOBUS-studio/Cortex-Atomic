@@ -6,7 +6,6 @@
     },
     "require": {
         "php": ">=8.0",
-        "bcosca/fatfree-core": "3.9.2",
-        "ikkez/f3-schema-builder": "2.*"
+        "bcosca/fatfree-core": "3.9.2"
     }
 }

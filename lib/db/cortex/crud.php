@@ -172,7 +172,7 @@ trait CrudTrait {
 									$groupFields[]=$this->table.'.'.$this->primary;
 								}
 								// all non-aggregated fields need to be present in the GROUP BY clause
-								if (isset($m_refl_adhoc) && preg_match('/sybase|dblib|odbc|sqlsrv/i',$this->db->driver()))
+								if (isset($m_refl_adhoc) && preg_match('/sybase|dblib|odbc|sqlsrv|ibm/i',$this->db->driver()))
 									foreach (array_diff($this->mapper->fields(),array_keys($m_refl_adhoc)) as $field)
 										if (!in_array($this->table.'.'.$field,$groupFields))
 											$options['group'] .= ', '.$this->table.'.'.$field;

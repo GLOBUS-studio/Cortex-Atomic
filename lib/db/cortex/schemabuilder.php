@@ -10,7 +10,7 @@
  */
 
 namespace DB;
-use DB\SQL\Schema;
+use DB\Cortex\Schema\Schema;
 
 trait SchemaBuilderTrait {
 
@@ -62,7 +62,7 @@ trait SchemaBuilderTrait {
 				$fields = [];
 		if ($db instanceof SQL) {
 			$schema = new Schema($db);
-			Cortex\ConstraintAdapter::enableForeignKeys($db);
+			Schema::enableForeignKeys($db);
 			$belongsToFK = []; // collect belongs-to-one for FK after table build
 			$pendingPivots = []; // collect m:m pivot info for deferred creation
 			// prepare field configuration
@@ -162,8 +162,8 @@ trait SchemaBuilderTrait {
 				$canAddFK = in_array($pv['relTable'], $schema->getTables())
 					&& in_array($tableName, $schema->getTables());
 				if ($canAddFK) {
-					Cortex\ConstraintAdapter::createPivotTable(
-						$db, $pv['mmTable'],
+					$schema->createPivotTable(
+						$pv['mmTable'],
 						$pv['relField'], $pv['relFieldType'],
 						$pv['relTable'], $pv['relPrimary'],
 						$pv['col2Name'], $pv['col2Type'],
@@ -184,8 +184,8 @@ trait SchemaBuilderTrait {
 			// add belongs-to-one FK constraints (skipped on SQLite)
 			foreach ($belongsToFK as $col => $ref) {
 				if (in_array($ref['table'], $schema->getTables()))
-					Cortex\ConstraintAdapter::addBelongsToForeignKey(
-						$db, $tableName, $col,
+					$schema->addForeignKey(
+						$tableName, $col,
 						$ref['table'], $ref['column'], 'SET NULL'
 					);
 			}
@@ -219,7 +219,7 @@ trait SchemaBuilderTrait {
 		if (!($db instanceof SQL))
 			return false;
 		$schema = new Schema($db);
-		Cortex\ConstraintAdapter::enableForeignKeys($db);
+		Schema::enableForeignKeys($db);
 		$ownPrimary = isset($df) ? $df['primary'] : 'id';
 		foreach ($fields as $key => $field) {
 			$field = static::resolveRelationConf($field);
@@ -240,9 +240,9 @@ trait SchemaBuilderTrait {
 						$relField = $relConf['isSelf']?$relConf['selfRefField']:$relConf['relField'];
 						$col2Name = $toConf['has-many']['relField'];
 						// check if FK already exists
-						if (!Cortex\ConstraintAdapter::hasForeignKey($db, $mmTable, $relField)) {
-							Cortex\ConstraintAdapter::recreatePivotWithFK(
-								$db, $mmTable,
+						if (!$schema->hasForeignKey($mmTable, $relField)) {
+							$schema->recreatePivotWithFK(
+								$mmTable,
 								$relField, $relConf['relFieldType'],
 								$rel['table'], $rel['primary'],
 								$col2Name, $field['type'] ?? Schema::DT_INT,
@@ -263,9 +263,9 @@ trait SchemaBuilderTrait {
 					? $btoRefConf['primary'] : $btoConf[1];
 				if (in_array($btoRefConf['table'], $schema->getTables())
 					&& in_array($table, $schema->getTables())) {
-					if (!Cortex\ConstraintAdapter::hasForeignKey($db, $table, $key))
-						Cortex\ConstraintAdapter::addBelongsToForeignKey(
-							$db, $table, $key,
+					if (!$schema->hasForeignKey($table, $key))
+						$schema->addForeignKey(
+							$table, $key,
 							$btoRefConf['table'], $btoRefCol, 'SET NULL'
 						);
 				}

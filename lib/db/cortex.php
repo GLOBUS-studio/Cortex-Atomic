@@ -16,14 +16,21 @@
  *  can be waived if you get permission from the copyright holder.
  *
  *  @package DB
- *  @version 1.8.7-atomic
+ *  @version 2.0.0
  *  @date 29.03.2026
  *  @since 22.01.2013
  */
 
 namespace DB;
-use DB\SQL\Schema;
+use DB\Cortex\Schema\Schema;
 
+require_once __DIR__.'/cortex/schema/db_utils.php';
+require_once __DIR__.'/cortex/schema/schema.php';
+require_once __DIR__.'/cortex/schema/tablebuilder.php';
+require_once __DIR__.'/cortex/schema/tablecreator.php';
+require_once __DIR__.'/cortex/schema/tablemodifier.php';
+require_once __DIR__.'/cortex/schema/column.php';
+require_once __DIR__.'/cortex/constraintadapter.php';
 require_once __DIR__.'/cortex/schemabuilder.php';
 require_once __DIR__.'/cortex/cast.php';
 require_once __DIR__.'/cortex/fieldaccess.php';

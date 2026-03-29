@@ -3,6 +3,52 @@ https://github.com/GLOBUS-studio/Cortex-Atomic
 Part of Atomic Framework: https://github.com/MADEVAL/Atomic-Framework
 Based on Cortex by ikkez (Christian Knuth) for Fat-Free Framework.
 
+2.0.0 (29.03.2026)
+
+  [Integrated Schema Builder - BREAKING: external dependency removed]
+*	forked ikkez/f3-schema-builder 2.2.5 into lib/db/cortex/schema/
+	- new namespace: DB\Cortex\Schema (6 files)
+	- Schema, TableBuilder, TableCreator, TableModifier, Column, DB_Utils
+	- backward-compatible class_alias: \DB\SQL\Schema -> \DB\Cortex\Schema\Schema
+	- existing code using \DB\SQL\Schema::DT_* constants works without changes
+*	integrated ConstraintAdapter FK methods directly into Schema class
+	- addForeignKey(), hasForeignKey(), foreignKeyClause()
+	- createPivotTable(), recreatePivotWithFK()
+	- enableForeignKeys(), resolveColumnType()
+	- hasIndex() with full column introspection
+*	ConstraintAdapter rewritten as thin backward-compatible facade
+	- all methods delegate to Schema instance methods
+	- marked @deprecated, kept for existing test compatibility
+*	SchemaBuilderTrait updated to use Schema directly (no more ConstraintAdapter calls)
+*	removed external ikkez/f3-schema-builder dependency from composer.json
+
+  [Multi-DB Driver Fixes - 12 bugs fixed]
+*	fixed 3 typos in type mappings inherited from upstream f3-schema-builder:
+	- 'imb' -> 'ibm' in INT4, INT8, FLOAT (IBM DB2 types were unreachable)
+	- 'obdc' -> 'odbc' in renameColumn() (ODBC rename went to wrong branch)
+*	fixed pgsql listIndex() SQL query missing space before GROUP BY
+*	added missing driver entries in findQuery() dispatch arrays:
+	- getDatabases(): added sqlite, ibm
+	- primary() composite key: added ibm
+	- CUR_STAMP default: added ibm (CURRENT_TIMESTAMP)
+	- updateColumn(): added odbc (2 places: simple + Column object)
+*	added hasForeignKey() support for MSSQL/sqlsrv/dblib/sybase/odbc, IBM DB2
+	- MSSQL: INFORMATION_SCHEMA.CONSTRAINT_COLUMN_USAGE query
+	- IBM DB2: SYSCAT.REFERENCES + SYSCAT.KEYCOLUSE query
+*	added hasIndex() column introspection for pgsql, MSSQL, IBM DB2
+	- pgsql: pg_index + pg_attribute query
+	- MSSQL: sys.index_columns + sys.indexes query
+	- IBM DB2: SYSCAT.INDEXCOLUSE query
+*	added addForeignKey() support for IBM DB2
+*	added listIndex() support for IBM DB2 (SYSCAT.INDEXES), ODBC (sys.indexes)
+*	added ibm to GROUP BY requirement in CRUD join queries
+
+  [Test Suite - 513 Tests]
+*	added Test_Schema (21 tests): class_alias mapping, DT_* constants,
+	createTable/alterTable/dropTable, Column fluent API, enableForeignKeys,
+	resolveColumnType, createPivotTable, hasForeignKey, hasIndex,
+	foreignKeyClause, addForeignKey, recreatePivotWithFK with data preservation
+
 1.8.7-atomic (29.03.2026)
 
   [Bug Fixes]

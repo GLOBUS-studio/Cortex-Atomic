@@ -5,7 +5,7 @@ Developed and maintained by [GLOBUS.studio](https://github.com/GLOBUS-studio/Cor
 Based on [Cortex](https://github.com/ikkez/F3-Sugar/tree/master/Cortex) by Christian Knuth (ikkez) for [Fat-Free Framework](https://fatfreeframework.com/).
 
 > PHP 8.0 - 8.5 | SQLite, MySQL, PostgreSQL, SQL Server, MongoDB, Jig
-> 487 tests | GPLv3
+> 513 tests | GPLv3
 
 ### A multi-engine ORM / ODM - Cortex-Atomic
 
@@ -26,7 +26,7 @@ Cortex is a multi-engine ActiveRecord ORM / ODM that offers easy object persiste
 #### Changes from the original Cortex
 
   - **PHP 8.0+** - minimum requirement, uses `str_contains()`, removed deprecated `setAccessible()` calls
-  - **PHP 8.5 compatible** - fully tested and working (487 tests)
+  - **PHP 8.5 compatible** - fully tested and working (513 tests)
   - **Trait-based architecture** - Cortex class decomposed into 5 focused traits:
     - `SchemaBuilderTrait` - table setup/setdown, schema resolution, defaults
     - `CastTrait` - casting mappers to arrays, field type serialization
@@ -34,7 +34,12 @@ Cortex is a multi-engine ActiveRecord ORM / ODM that offers easy object persiste
     - `RelationTrait` - has/filter, relation loading, countRel, mergeFilter
     - `CrudTrait` - find, load, save, erase, count, paginate, findByRawSQL
   - **Extracted classes** - `CortexQueryParser` and `CortexCollection` in separate files (`lib/db/cortex/`)
-  - **487 tests** - comprehensive test suite on SQLite covering all public API, relations, edge cases, events
+  - **Integrated Schema Builder** - forked `ikkez/f3-schema-builder` into `lib/db/cortex/schema/`, zero external dependencies
+    - Full FK constraint support (inline for SQLite, ALTER TABLE for others)
+    - Pivot table creation with UNIQUE indexes and FK constraints
+    - Multi-DB driver coverage: SQLite, MySQL, PostgreSQL, SQL Server, IBM DB2, ODBC
+    - Backward-compatible `\DB\SQL\Schema` alias via `class_alias`
+  - **513 tests** - comprehensive test suite on SQLite covering all public API, relations, schema, edge cases, events
   - **Atomic Framework** - prepared for integration into the [Atomic ecosystem](https://github.com/MADEVAL/Atomic-Framework)
   - **Fat-Free Framework** - fully compatible with F3 3.9.x as standalone ORM
 
@@ -240,7 +245,7 @@ In the `$fieldConf` array, you can set data types (`type`), `nullable` flags and
 
 **You don't need to configure all fields this way.** If you're working with existing tables, the underlying SQL Mapper exposes the existing table schema. So if you don't need that auto-installer feature, you can just skip the configuration for those fields, or just setup only those you need (i.e. for fields with relations).
 
-Because column data types are currently only needed for setting up the tables in SQL, it follows that [SQL Data Types Table](https://github.com/ikkez/f3-schema-builder/tree/master#column-class) from the required [SQL Schema Plugin](https://github.com/ikkez/f3-schema-builder/blob/master/lib/db/sql/schema.php).
+Because column data types are currently only needed for setting up the tables in SQL, they use the integrated Schema Builder (forked from [ikkez/f3-schema-builder](https://github.com/ikkez/f3-schema-builder) and bundled in `lib/db/cortex/schema/`). See the [Column Class](lib/db/cortex/schema/column.php) for all available types.
 
 You may also extend this config array to have a place for own validation rules or whatever you like.
 
@@ -1035,7 +1040,7 @@ protected $fieldConf = [
 ]
 ```
 
-Get the whole list of possible types from the [Data Types Table](https://github.com/ikkez/f3-schema-builder/tree/master#column-class).
+Get the whole list of possible types from the [Schema Data Types](lib/db/cortex/schema/schema.php) (see `$dataTypes` array and `DT_*` constants).
 
 *NB:* You can also add `'passThrough' => true` in order to use the raw value in *type* as data type in case you need a custom type which is not available in the data types table. 
  
@@ -2065,7 +2070,7 @@ cd test
 composer install
 ```
 
-This installs Fat-Free Framework 3.9.2 and the SQL Schema Plugin into `test/vendor/`.
+This installs Fat-Free Framework 3.9.2 into `test/vendor/`.
 
 ### Run
 
@@ -2082,14 +2087,22 @@ Tests run against SQLite (no external DB server required). The suite covers:
 - **Coverage** (44 tests) - public methods, error paths, event hooks, edge cases
 - **Collection** (32 tests) - CortexCollection API: castAll, getAll, getBy, orderBy, slice, compare
 - **Coverage Extra** (76 tests) - compare(), rel(), countRel, fluid SQL mode, touch(), virtual()
+- **Transactions** (22 tests) - implicit transaction commit/rollback, nesting, erase rollback
+- **Constraints** (24 tests) - FK enforcement, pivot UNIQUE, hasForeignKey/hasIndex introspection
+- **Eager Loading** (23 tests) - with() fluent API, dot-notation, depth-based, filter integration
+- **Edge Cases** (45 tests) - NULL filters, empty strings, orphan records, boundary conditions
+- **Hardened** (118 tests) - stress tests, parser unit tests, reserved words, concurrent updates
+- **Schema** (21 tests) - class_alias, createTable, alterTable, FK methods, pivot operations
+- **IN Syntax** (5 tests) - IN (?) normalization, array expansion, named params
+- **Multi-DB Coverage** (28 tests) - type resolution per driver, DT_* constants
 
-**247 tests total**, all passing on PHP 8.0 - 8.5.
+**513 tests total**, all passing on PHP 8.0 - 8.5.
 
 ### File structure
 
 ```
 test/
-├── composer.json           # test dependencies (F3 3.9.2 + schema-builder)
+├── composer.json           # test dependencies (F3 3.9.2)
 ├── run.php                 # CLI test runner
 ├── test_syntax.php         # SQL/Jig/Mongo query syntax tests
 ├── test_relation.php       # relation CRUD tests
@@ -2098,6 +2111,8 @@ test/
 ├── test_coverage.php       # public API coverage tests
 ├── test_collection.php     # CortexCollection tests
 ├── test_coverage_extra.php # edge cases, fluid mode, events, virtual fields
+├── test_hardened.php       # stress tests, parser unit tests, reserved word probes
+├── test_schema.php         # Schema class tests: types, FK, pivot, class_alias
 ├── authormodel.php         # test model: Author (has-many News, has-one Profile)
 ├── newsmodel.php           # test model: News (belongs-to-one Author, belongs-to-many Tags)
 ├── tagmodel.php            # test model: Tag (has-many News via m:m)

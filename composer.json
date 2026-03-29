@@ -8,7 +8,6 @@
         "classmap": ["lib/"]
     },
     "require": {
-        "php": ">=8.0",
-        "ikkez/f3-schema-builder": "2.*"
+        "php": ">=8.0"
     }
 }
