@@ -15,7 +15,7 @@ class TableCreator extends TableBuilder {
 	const
 		TEXT_TableAlreadyExists="Table `%s` already exists. Cannot create it.";
 
-	protected $charset='utf8';
+	protected $charset='utf8mb4';
 	protected $collation='unicode';
 
 	public function setCharset($charset,$collation='unicode') {

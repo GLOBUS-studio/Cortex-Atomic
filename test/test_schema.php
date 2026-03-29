@@ -153,15 +153,11 @@ class Test_Schema {
 
 		// hasForeignKey via Schema instance
 		\DB\Cortex\Schema\Schema::enableForeignKeys($db);
-		if (str_contains($db->driver(), 'sqlite')) {
-			$test->expect(
-				$schema->hasForeignKey('stest_pivot', 'a_id') === true
-				&& $schema->hasForeignKey('stest_pivot', 'b_id') === true,
-				$type.': Schema::hasForeignKey() detects FK on pivot columns'
-			);
-		} else {
-			$test->expect(true, $type.': Schema::hasForeignKey() on pivot (non-SQLite skipped)');
-		}
+		$test->expect(
+			$schema->hasForeignKey('stest_pivot', 'a_id') === true
+			&& $schema->hasForeignKey('stest_pivot', 'b_id') === true,
+			$type.': Schema::hasForeignKey() detects FK on pivot columns'
+		);
 
 		// hasIndex via Schema instance
 		$test->expect(

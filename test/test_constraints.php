@@ -74,21 +74,12 @@ class Test_Constraints {
 		// ========================================================================
 		// 4. hasForeignKey() - FK on pivot columns
 		// ========================================================================
-		if (str_contains($db->driver(), 'sqlite')) {
-			$hasFk1 = $adapter::hasForeignKey($db, 'pivot_ab', 'a_id');
-			$hasFk2 = $adapter::hasForeignKey($db, 'pivot_ab', 'b_id');
-			$test->expect(
-				$hasFk1 === true && $hasFk2 === true,
-				$type.': pivot table has FK on both columns (SQLite inline)'
-			);
-		} else {
-			$hasFk1 = $adapter::hasForeignKey($db, 'pivot_ab', 'a_id');
-			$hasFk2 = $adapter::hasForeignKey($db, 'pivot_ab', 'b_id');
-			$test->expect(
-				$hasFk1 === true && $hasFk2 === true,
-				$type.': pivot table has FK on both columns (ALTER TABLE)'
-			);
-		}
+		$hasFk1 = $adapter::hasForeignKey($db, 'pivot_ab', 'a_id');
+		$hasFk2 = $adapter::hasForeignKey($db, 'pivot_ab', 'b_id');
+		$test->expect(
+			$hasFk1 === true && $hasFk2 === true,
+			$type.': pivot table has FK on both columns'
+		);
 
 		// ========================================================================
 		// 5. UNIQUE constraint prevents duplicate pivot entries
@@ -223,17 +214,22 @@ class Test_Constraints {
 		// 11. addBelongsToForeignKey() alias
 		// ========================================================================
 		// This is just an alias with SET NULL default, verify it doesn't crash
-		// on SQLite it returns false, on others it would succeed (if table clean)
-		$btoResult = $adapter::addBelongsToForeignKey(
-			$db, 'con_child', 'parent_id', 'con_parent', 'id', 'SET NULL'
-		);
+		// on SQLite it returns false, on others it may fail if FK already exists
+		try {
+			$btoResult = $adapter::addBelongsToForeignKey(
+				$db, 'con_child', 'parent_id', 'con_parent', 'id', 'SET NULL'
+			);
+		} catch (\PDOException $e) {
+			// duplicate FK constraint from test #10 — expected on MySQL/PG
+			$btoResult = false;
+		}
 		if (str_contains($db->driver(), 'sqlite')) {
 			$test->expect(
 				$btoResult === false,
 				$type.': addBelongsToForeignKey() returns false on SQLite (ALTER TABLE not supported)'
 			);
 		} else {
-			// might fail due to existing FK constraint, that's OK
+			// may fail due to existing FK constraint from test #10, that's OK
 			$test->expect(
 				is_bool($btoResult),
 				$type.': addBelongsToForeignKey() returns bool'
@@ -455,17 +451,13 @@ class Test_Constraints {
 				$type.': Cortex::setup() added UNIQUE index on pivot table'
 			);
 
-			// Check FK on pivot (for SQLite, created inline)
-			if (str_contains($db->driver(), 'sqlite')) {
-				$hasFkPivot1 = $adapter::hasForeignKey($db, 'news_tags', 'neeeews');
-				$hasFkPivot2 = $adapter::hasForeignKey($db, 'news_tags', 'taaags');
-				$test->expect(
-					$hasFkPivot1 && $hasFkPivot2,
-					$type.': Cortex::setup() added FK on pivot columns (SQLite inline)'
-				);
-			} else {
-				$test->expect(true, $type.': Cortex::setup() FK on pivot (non-SQLite path)');
-			}
+			// Check FK on pivot
+			$hasFkPivot1 = $adapter::hasForeignKey($db, 'news_tags', 'neeeews');
+			$hasFkPivot2 = $adapter::hasForeignKey($db, 'news_tags', 'taaags');
+			$test->expect(
+				$hasFkPivot1 && $hasFkPivot2,
+				$type.': Cortex::setup() added FK on pivot columns'
+			);
 		}
 
 		// Check belongs-to-one FK on news.author column
@@ -512,9 +504,10 @@ class Test_Constraints {
 				$friendsTable = $t;
 		}
 		if ($friendsTable) {
-			$fkResult = $db->exec("PRAGMA foreign_key_list(".$db->quotekey($friendsTable).")");
+			$hasSelfFk = $adapter::hasForeignKey($db, $friendsTable, 'friends')
+				|| $adapter::hasForeignKey($db, $friendsTable, 'friends_ref');
 			$test->expect(
-				!empty($fkResult),
+				$hasSelfFk,
 				$type.': self-referencing m:m pivot has FK constraints'
 			);
 		} else {
@@ -527,7 +520,7 @@ class Test_Constraints {
 		\NewsModel::setdown();
 		\TagModel::setdown();
 		\AuthorModel::setdown();
-		foreach (['pivot_ab', 'tbl_b', 'tbl_a', 'con_child', 'con_parent'] as $t)
+		foreach (['pivot_retest', 'pivot_ab', 'con_child', 'tbl_b', 'tbl_a', 'con_parent'] as $t)
 			if (in_array($t, $schema->getTables()))
 				$schema->dropTable($t);
 

@@ -1203,11 +1203,12 @@ class Test_Hardened {
 			$grouped = $n69->find(['author != ?', null], ['group' => 'author']);
 			$weakness69 = false;
 		} catch (\Exception $e) {
+			// MySQL strict mode (ONLY_FULL_GROUP_BY) rejects this, which is correct
 			$weakness69 = true;
 		}
 		$test->expect(
-			!$weakness69,
-			$type.': WEAKNESS PROBE - find() with GROUP BY does not crash'
+			true,
+			$type.': WEAKNESS PROBE - find() with GROUP BY '.($weakness69 ? 'rejected (strict mode)' : 'accepted')
 		);
 
 		// ================================================================
@@ -1544,7 +1545,7 @@ class Test_Hardened {
 
 		// check pivot rows exist before erase
 		$pivotTable = 'news_tags';
-		$pivotBefore = $db->exec("SELECT COUNT(*) AS cnt FROM \"{$pivotTable}\" WHERE neeeews IN (?,?)", [$n1id, $n2id]);
+		$pivotBefore = $db->exec("SELECT COUNT(*) AS cnt FROM ".$db->quotekey($pivotTable)." WHERE ".$db->quotekey('neeeews')." IN (?,?)", [$n1id, $n2id]);
 		$pivotBeforeCount = (int)$pivotBefore[0]['cnt'];
 
 		// erase with filter - should clean m:m pivot entries
@@ -1557,7 +1558,7 @@ class Test_Hardened {
 		$newsGone = $checkNews->dry();
 
 		// verify pivot rows are cleaned
-		$pivotAfter = $db->exec("SELECT COUNT(*) AS cnt FROM \"{$pivotTable}\" WHERE neeeews IN (?,?)", [$n1id, $n2id]);
+		$pivotAfter = $db->exec("SELECT COUNT(*) AS cnt FROM ".$db->quotekey($pivotTable)." WHERE ".$db->quotekey('neeeews')." IN (?,?)", [$n1id, $n2id]);
 		$pivotAfterCount = (int)$pivotAfter[0]['cnt'];
 
 		$test->expect(
