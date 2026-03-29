@@ -108,8 +108,8 @@ class CortexQueryParser extends \Prefab {
 						}
 						// comparison against NULL
 						elseif($val === null &&
-							preg_match('/((?:\S[\w\-]+\S.?)+)\s*'.
-								'(!?==?)\s*(?:\?|:\w+)/i',$part,$match)) {
+							preg_match('/(.+?)\s*(!?={1,2})\s*(?:\?|:\w+)/i',
+								$part,$match)) {
 							$part = ' '.$match[1].' IS '.($match[2][0]=='!'?'NOT ':'').'NULL ';
 						} else
 							$ncond[] = $val;
@@ -248,10 +248,13 @@ class CortexQueryParser extends \Prefab {
 					$skipVal=true;
 				}
 				elseif($val===null && preg_match('/(\w+)\s*([!=<>]+)\s*\?/i',$part,$nmatch)
-					&& ($nmatch[2]=='=' || $nmatch[2]=='==')){
+					&& ($nmatch[2]=='=' || $nmatch[2]=='==' || $nmatch[2]=='!=' || $nmatch[2]=='!==')){
 					$kval=ltrim($nmatch[1],'@');
-					$part = '(!array_key_exists(\''.$kval.'\',$_row) || '.
-						'(array_key_exists(\''.$kval.'\',$_row) && $_row[\''.$kval.'\']===NULL))';
+					if ($nmatch[2][0] == '!')
+						$part = '(array_key_exists(\''.$kval.'\',$_row) && $_row[\''.$kval.'\']!==NULL)';
+					else
+						$part = '(!array_key_exists(\''.$kval.'\',$_row) || '.
+							'(array_key_exists(\''.$kval.'\',$_row) && $_row[\''.$kval.'\']===NULL))';
 					unset($part);
 					continue;
 				}

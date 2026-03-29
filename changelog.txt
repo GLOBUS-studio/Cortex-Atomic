@@ -3,6 +3,36 @@ https://github.com/GLOBUS-studio/Cortex-Atomic
 Part of Atomic Framework: https://github.com/MADEVAL/Atomic-Framework
 Based on Cortex by ikkez (Christian Knuth) for Fat-Free Framework.
 
+1.8.5-atomic (29.03.2026)
+
+  [Bug Fixes]
+*	fixed count() default TTL from 60 to 0 (was silently caching for 1 minute)
+	- all CRUD methods now consistently default to $ttl=0
+*	fixed SQL NULL regex in prepareFilter() for short field names
+	- old regex required 3+ character identifiers to match
+	- new regex handles any field length including single-char columns
+	- works correctly with both quoted and unquoted identifiers
+*	fixed JIG engine: != null / !== null filter handling
+	- previously only = and == were handled for NULL comparison
+	- now != and !== correctly produce IS NOT NULL equivalent logic
+	- uses strict comparison (!==) to avoid false positives with 0, '', false
+
+  [Test Suite - 372 Tests]
+*	added Test_EdgeCases class (45 tests) with diverse seed data covering:
+	- NULL filter params: = null, != null, == null, !== null
+	- NULL in compound filters: AND, OR, mixed null/value combinations
+	- named parameters with NULL values
+	- count() with NULL filters and default TTL verification
+	- empty string vs NULL distinction (tests '' != NULL)
+	- string "0" as distinct non-null value
+	- NULL FK relations (orphan records via belongs-to-one)
+	- load() with NULL parameter
+	- edge-case filters: empty array, null, no filter
+	- CortexQueryParser-level NULL handling verification
+	- no bind param leakage on NULL-to-IS-NULL conversion
+	- comprehensive seed data: 6 authors, 4 profiles, 4 tags, 8 news
+	  with diverse NULL / empty / value combinations
+
 1.8.4-atomic (30.03.2026)
 
   [Eager Loading API - with()]

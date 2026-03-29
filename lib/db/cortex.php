@@ -16,8 +16,8 @@
  *  can be waived if you get permission from the copyright holder.
  *
  *  @package DB
- *  @version 1.8.4-atomic
- *  @date 30.03.2026
+ *  @version 1.8.5-atomic
+ *  @date 29.03.2026
  *  @since 22.01.2013
  */
 

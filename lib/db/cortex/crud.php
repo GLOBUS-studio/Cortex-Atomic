@@ -545,7 +545,7 @@ trait CrudTrait {
 	 * @param int $ttl
 	 * @return mixed
 	 */
-	public function count($filter=NULL, ?array $options=NULL, $ttl=60) {
+	public function count($filter=NULL, ?array $options=NULL, $ttl=0) {
 		$has=$this->hasCond;
 		$count=$this->filteredFind($filter,$options,$ttl,true);
 		$this->hasCond=$has;

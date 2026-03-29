@@ -96,6 +96,13 @@ foreach ($dbs as $type => $db) {
     $results = array_merge($results, (array)$test->run($db, $type));
 }
 
+// Test Edge Cases (NULL handling, count TTL, diverse data)
+foreach ($dbs as $type => $db) {
+    $f3->set('DB', $db);
+    $test = new \Test_EdgeCases();
+    $results = array_merge($results, (array)$test->run($db, $type));
+}
+
 // Output results
 echo str_repeat('=', 70).PHP_EOL;
 echo "  CORTEX-ATOMIC TEST RESULTS".PHP_EOL;
