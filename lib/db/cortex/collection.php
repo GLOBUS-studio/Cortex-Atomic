@@ -1,6 +1,9 @@
 <?php
 
-namespace DB;
+namespace DB\Cortex;
+
+use DB\Cortex;
+use DB\Cursor;
 
 class CortexCollection extends \ArrayIterator {
 

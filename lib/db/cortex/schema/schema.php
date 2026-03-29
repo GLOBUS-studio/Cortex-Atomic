@@ -651,4 +651,5 @@ class Schema {
 }
 
 // Backward-compatible alias so existing code using \DB\SQL\Schema still works
-class_alias(Schema::class, 'DB\SQL\Schema');
+if (!class_exists('DB\SQL\Schema', false))
+	class_alias(Schema::class, 'DB\SQL\Schema');

@@ -23,19 +23,13 @@
 
 namespace DB;
 use DB\Cortex\Schema\Schema;
-
-require_once __DIR__.'/cortex/schema/db_utils.php';
-require_once __DIR__.'/cortex/schema/schema.php';
-require_once __DIR__.'/cortex/schema/tablebuilder.php';
-require_once __DIR__.'/cortex/schema/tablecreator.php';
-require_once __DIR__.'/cortex/schema/tablemodifier.php';
-require_once __DIR__.'/cortex/schema/column.php';
-require_once __DIR__.'/cortex/constraintadapter.php';
-require_once __DIR__.'/cortex/schemabuilder.php';
-require_once __DIR__.'/cortex/cast.php';
-require_once __DIR__.'/cortex/fieldaccess.php';
-require_once __DIR__.'/cortex/relation.php';
-require_once __DIR__.'/cortex/crud.php';
+use DB\Cortex\SchemaBuilderTrait;
+use DB\Cortex\CastTrait;
+use DB\Cortex\FieldAccessTrait;
+use DB\Cortex\RelationTrait;
+use DB\Cortex\CrudTrait;
+use DB\Cortex\CortexQueryParser;
+use DB\Cortex\CortexCollection;
 
 class Cortex extends Cursor {
 
@@ -255,6 +249,13 @@ class Cortex extends Cursor {
 
 	public function __clone() {
 		$this->mapper = clone($this->mapper);
+		$this->fieldsCache = [];
+		$this->saveCsd = [];
+		$this->collection = null;
+		$this->hasCond = null;
+		$this->countFields = [];
+		$this->preBinds = [];
+		$this->grp_stack = null;
 	}
 
 	function getiterator() {
@@ -263,5 +264,6 @@ class Cortex extends Cursor {
 	}
 }
 
-require_once __DIR__.'/cortex/queryparser.php';
-require_once __DIR__.'/cortex/collection.php';
+// Backward-compatible aliases for classes moved to DB\Cortex namespace
+class_alias(CortexQueryParser::class, 'DB\\CortexQueryParser');
+class_alias(CortexCollection::class, 'DB\\CortexCollection');

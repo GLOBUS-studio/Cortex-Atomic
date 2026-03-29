@@ -1,6 +1,6 @@
 <?php
 
-namespace DB;
+namespace DB\Cortex;
 
 class CortexQueryParser extends \Prefab {
 

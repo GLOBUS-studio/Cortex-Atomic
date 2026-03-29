@@ -7,7 +7,6 @@
     "require": {
         "php": ">=8.0",
         "bcosca/fatfree-core": "3.9.2",
-        "mongodb/mongodb": "^2.1",
-        "ikkez/f3-schema-builder": "2.*"
+        "mongodb/mongodb": "^2.1"
     }
 }

@@ -11,7 +11,9 @@
  *  @package DB
  */
 
-namespace DB;
+namespace DB\Cortex;
+
+use DB\Cortex;
 use DB\SQL\Schema;
 
 trait FieldAccessTrait {
@@ -237,7 +239,7 @@ trait FieldAccessTrait {
 			// convert array content
 			if (is_array($val) && $this->dbsType == 'sql') {
 				if ($fields[$key]['type']==self::DT_SERIALIZED)
-					$val=serialize($val);
+					$val=json_encode($val);
 				elseif ($fields[$key]['type']==self::DT_JSON)
 					$val=json_encode($val);
 				else
@@ -593,7 +595,7 @@ trait FieldAccessTrait {
 			elseif (isset($fields[$key]['type'])) {
 				if ($this->dbsType == 'sql') {
 					if ($fields[$key]['type'] == self::DT_SERIALIZED)
-						$this->fieldsCache[$key] = unserialize($this->mapper->{$key}, ['allowed_classes' => false]);
+						$this->fieldsCache[$key] = $this->decodeSerializedValue($this->mapper->{$key}?:'');
 					elseif ($fields[$key]['type'] == self::DT_JSON)
 						$this->fieldsCache[$key] = json_decode($this->mapper->{$key}?:'',true);
 				}

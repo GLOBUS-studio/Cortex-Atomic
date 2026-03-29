@@ -9,7 +9,12 @@
  *  @package DB
  */
 
-namespace DB;
+namespace DB\Cortex;
+
+use DB\Cortex;
+use DB\SQL;
+use DB\Jig;
+use DB\Mongo;
 use DB\Cortex\Schema\Schema;
 
 trait SchemaBuilderTrait {

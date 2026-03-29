@@ -72,6 +72,20 @@ class Test_Coverage {
 			$cx->title == 'clone_source' && $clone->title == 'clone_modified',
 			$type.': __clone creates independent mapper copy'
 		);
+
+		// ========================================================================
+		// 5b. __clone - transient state is reset
+		// ========================================================================
+		$test->expect(
+			(new \ReflectionProperty($clone, 'fieldsCache'))->getValue($clone) === []
+			&& (new \ReflectionProperty($clone, 'saveCsd'))->getValue($clone) === []
+			&& (new \ReflectionProperty($clone, 'collection'))->getValue($clone) === null
+			&& (new \ReflectionProperty($clone, 'hasCond'))->getValue($clone) === null
+			&& (new \ReflectionProperty($clone, 'countFields'))->getValue($clone) === []
+			&& (new \ReflectionProperty($clone, 'preBinds'))->getValue($clone) === []
+			&& (new \ReflectionProperty($clone, 'grp_stack'))->getValue($clone) === null,
+			$type.': __clone resets transient state (fieldsCache, saveCsd, collection, hasCond, etc.)'
+		);
 		$cx->reset();
 
 		// ========================================================================
@@ -285,6 +299,43 @@ class Test_Coverage {
 			is_array($castS['blob']) && $castS['blob']['x'] == 1 && $castS['blob']['y'] == [2, 3],
 			$type.': DT_SERIALIZED field roundtrip (save & cast)'
 		);
+
+		// ========================================================================
+		// 17b. DT_SERIALIZED now writes JSON, verify raw storage
+		// ========================================================================
+		if (str_contains($type, 'sql')) {
+			$rawRow = $db->exec('SELECT '.$db->quotekey('blob').' FROM '.$db->quotekey($tname).' WHERE title = ?', ['serial_test']);
+			$rawBlob = $rawRow[0]['blob'] ?? '';
+			$jsonDecoded = json_decode($rawBlob, true);
+			$test->expect(
+				json_last_error() === JSON_ERROR_NONE
+					&& $jsonDecoded['x'] == 1
+					&& $jsonDecoded['y'] == [2, 3],
+				$type.': DT_SERIALIZED writes JSON (not PHP serialize) to storage'
+			);
+		} else {
+			$test->expect(true, $type.': DT_SERIALIZED writes JSON (not PHP serialize) to storage (skipped, non-SQL)');
+		}
+
+		// ========================================================================
+		// 17c. DT_SERIALIZED backward compat: reads old PHP-serialized data
+		// ========================================================================
+		if (str_contains($type, 'sql')) {
+			$oldSerialized = serialize(['legacy' => true, 'version' => 1]);
+			$db->exec('UPDATE '.$db->quotekey($tname).' SET '.$db->quotekey('blob').' = ? WHERE title = ?',
+				[$oldSerialized, 'serial_test']);
+			$cx->reset();
+			$cx->load(['title = ?', 'serial_test']);
+			$castLegacy = $cx->cast();
+			$test->expect(
+				is_array($castLegacy['blob'])
+					&& $castLegacy['blob']['legacy'] === true
+					&& $castLegacy['blob']['version'] === 1,
+				$type.': DT_SERIALIZED backward compat reads old PHP-serialized data'
+			);
+		} else {
+			$test->expect(true, $type.': DT_SERIALIZED backward compat reads old PHP-serialized data (skipped, non-SQL)');
+		}
 
 		// ========================================================================
 		// 18. BOOLEAN field handling
@@ -534,6 +585,20 @@ class Test_Coverage {
 
 		// ====== CLEANUP ======
 		\DB\Cortex::setdown($db, $tname);
+
+		// ========================================================================
+		// 33. Namespace migration - backward-compat aliases
+		// ========================================================================
+		$test->expect(
+			class_exists('DB\\Cortex\\CortexCollection')
+			&& class_exists('DB\\Cortex\\CortexQueryParser'),
+			$type.': Traits/classes in DB\\Cortex namespace'
+		);
+		$test->expect(
+			class_exists('DB\\CortexCollection')
+			&& class_exists('DB\\CortexQueryParser'),
+			$type.': Backward-compat aliases DB\\CortexCollection / DB\\CortexQueryParser'
+		);
 
 		///////////////////////////////////
 		return $test->results();

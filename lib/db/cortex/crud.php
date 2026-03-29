@@ -1,6 +1,8 @@
 <?php
 
-namespace DB;
+namespace DB\Cortex;
+
+use DB\Cortex;
 
 trait CrudTrait {
 

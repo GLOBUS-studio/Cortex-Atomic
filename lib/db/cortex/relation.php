@@ -13,7 +13,9 @@
  *  @package DB
  */
 
-namespace DB;
+namespace DB\Cortex;
+
+use DB\Cortex;
 
 trait RelationTrait {
 

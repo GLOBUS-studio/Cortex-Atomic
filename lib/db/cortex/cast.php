@@ -11,9 +11,24 @@
  *  @package DB
  */
 
-namespace DB;
+namespace DB\Cortex;
+
+use DB\Cortex;
 
 trait CastTrait {
+
+	/**
+	 * Decode a value stored as DT_SERIALIZED.
+	 * Tries json_decode first; falls back to unserialize for legacy data.
+	 * @param string $raw
+	 * @return mixed
+	 */
+	protected function decodeSerializedValue(string $raw): mixed {
+		$decoded = json_decode($raw, true);
+		if (json_last_error() === JSON_ERROR_NONE)
+			return $decoded;
+		return unserialize($raw, ['allowed_classes' => false]);
+	}
 
 	/**
 	 * Count records that are currently loaded
@@ -83,7 +98,7 @@ trait CastTrait {
 					elseif (isset($this->fieldConf[$key]['type'])) {
 						if ($this->dbsType == 'sql') {
 							if ($this->fieldConf[$key]['type'] == self::DT_SERIALIZED)
-								$val=unserialize($mp->mapper->{$key}?:'', ['allowed_classes' => false]);
+								$val=$this->decodeSerializedValue($mp->mapper->{$key}?:'');
 							elseif ($this->fieldConf[$key]['type'] == self::DT_JSON)
 								$val=json_decode($mp->mapper->{$key}?:'', true);
 						}
@@ -93,7 +108,7 @@ trait CastTrait {
 								if (is_string($val))
 									$val = ($ftype == self::DT_JSON)
 										? json_decode($val ?: '', true)
-										: unserialize($val ?: '', ['allowed_classes' => false]);
+										: $this->decodeSerializedValue($val ?: '');
 								elseif (is_object($val) && ($val instanceof \ArrayObject))
 									$val = json_decode(json_encode($val), true);
 							}
@@ -191,7 +206,7 @@ trait CastTrait {
 				if ($this->fieldConf[$key]['type'] == self::DT_JSON && is_string($val))
 					$val = json_decode($val?:'',true);
 				elseif ($this->fieldConf[$key]['type'] == self::DT_SERIALIZED && is_string($val))
-					$val = unserialize($val?:'', ['allowed_classes' => false]);
+					$val = $this->decodeSerializedValue($val?:'');
 			}
 			$this->set($key, $val);
 		}
@@ -362,7 +377,7 @@ trait CastTrait {
 			if ($this->fieldConf[$key]['type'] == self::DT_JSON)
 				return json_decode($fields[$key]['initial'], true);
 			elseif ($this->fieldConf[$key]['type'] == self::DT_SERIALIZED)
-				return unserialize($fields[$key]['initial'], ['allowed_classes' => false]);
+				return $this->decodeSerializedValue($fields[$key]['initial']);
 		}
 		return $fields[$key]['initial'] ?? null;
 	}
