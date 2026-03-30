@@ -3,6 +3,69 @@ https://github.com/GLOBUS-studio/Cortex-Atomic
 Part of Atomic Framework: https://github.com/MADEVAL/Atomic-Framework
 Based on Cortex by ikkez (Christian Knuth) for Fat-Free Framework.
 
+2.0.1 (30.03.2026)
+
+  [Bug Fixes]
+- fixed nested iterator corruption in CortexCollection under smart-loading
+  - getAll(), castAll(), getBy() reverted to getArrayCopy()
+  - foreach ($this as ...) called rewind() during smart-loading, returning
+    only 1 item instead of all N records in the collection
+- fixed castField() crash caused by getIterator() fix
+  - added instanceof Cortex guard for single-model case before iterating
+- fixed setdown() has-many pivot detection
+  - replaced key(...) == 'has-many' with array_key_exists('has-many', ...)
+  - was silently skipping pivot table drops on certain PHP array states
+- fixed erase(filter) double-parse bug on MongoDB with m:m relations
+  - $rawFilter preserved before prepareFilter(); while loop uses the original
+    unparsed filter to avoid re-parsing an already-prepared Mongo document
+- fixed _mongo_parse_logical_op() undefined offset on empty filter result
+  - added !empty($ncond) guard; returns null on empty instead of E_WARNING
+- fixed run_mongo.php: DB\SQL\Schema alias not registered before test_syntax
+  - added class_exists() call to trigger schema.php load and alias registration
+
+  [Improvements - 15 issues hardened]
+- #7  LRU eviction in CortexQueryParser.prepareFilter()
+  - in-memory query cache capped at 128 entries (configurable via CORTEX.queryCacheLimit)
+  - oldest half evicted on overflow to prevent unbounded memory growth
+- #8  CortexCollection::__clone() resets the relSets map on the copy
+  - cloned collections no longer share relation state with the original
+- #9  static per-class reflection cache in filteredFind()
+  - reflected property list computed once per mapper class, not on every find()
+- #10 getAll() / castAll() / getBy() use getArrayCopy() for iteration
+  - safe under nested calls during smart-loading (no iterator pointer corruption)
+- #11 resolveConfiguration() uses static per-class cache
+  - no repeated reflection overhead for models called multiple times
+- #12 setup() caches getTables() result internally
+  - no duplicate schema round-trips when called during initialization
+- #13 erase(filter) with m:m relations: iteration capped at 10000 cycles
+  - throws explicit exception on overflow instead of hanging indefinitely
+- #14 getiterator() returns ArrayIterator of cast fields
+  - enables foreach ($model as $key => $value) on a loaded Cortex instance
+  - collection cast() now works correctly with smart-loading enabled
+- #15 emit() deduplicates trigger registration; validates method before invoking
+  - non-existent method names no longer cause a fatal error
+- #16 $trigger declared in protected properties block
+  - removes undefined property notice on first use
+- #17 setdown() pivot detection uses array_key_exists() for reliability
+  - array_key_exists() is not affected by internal array pointer position
+- #18 skip() / first() / last() call reset(false, false)
+  - preserves countFields, preBinds and grp_stack across cursor navigation
+- #19 findByRawSQL() docblock documents SQL injection risk and parameter rules
+  - callers must use parameterized queries; raw concatenation is documented unsafe
+- #20 Jig engine validates field names via regex in _jig_parse_filter()
+  - throws E_INVALID_FIELD_NAME for names not matching /^[a-zA-Z_][a-zA-Z0-9_\-]*$/
+  - new constant CortexQueryParser::E_INVALID_FIELD_NAME added
+- #21 Schema, TableBuilder, Column, DB_Utils: public properties made protected
+  - public getter methods added: getDataTypes(), getDefaultTypes(), getName(),
+    getSchema(), getDb()
+  - direct property access replaced with getter calls in TableModifier and addColumn()
+
+  [Test Suite - 553 Tests (SQLite), 554 (MySQL/PgSQL), 279 (MongoDB)]
+- added test/test_fixes.php: 26 tests covering all 15 issues listed above
+  - SQL engines: all 26 tests run and pass
+  - MongoDB: SQL-only sections auto-skip with pass; non-SQL sections verified
+- all four runners updated: run.php, run_mysql.php, run_pgsql.php, run_mongo.php
+
 2.0.0 (29.03.2026)
 
   [Integrated Schema Builder - BREAKING: external dependency removed]

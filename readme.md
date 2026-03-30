@@ -5,7 +5,7 @@ Developed and maintained by [GLOBUS.studio](https://github.com/GLOBUS-studio/Cor
 Based on [Cortex](https://github.com/ikkez/F3-Sugar/tree/master/Cortex) by Christian Knuth (ikkez) for [Fat-Free Framework](https://fatfreeframework.com/).
 
 > PHP 8.0 - 8.5 | SQLite, MySQL, PostgreSQL, SQL Server, MongoDB, Jig
-> 513 tests | GPLv3
+> 553 tests | GPLv3
 
 ### A multi-engine ORM / ODM - Cortex-Atomic
 
@@ -39,7 +39,7 @@ Cortex is a multi-engine ActiveRecord ORM / ODM that offers easy object persiste
     - Pivot table creation with UNIQUE indexes and FK constraints
     - Multi-DB driver coverage: SQLite, MySQL, PostgreSQL, SQL Server, IBM DB2, ODBC
     - Backward-compatible `\DB\SQL\Schema` alias via `class_alias`
-  - **513 tests** - comprehensive test suite on SQLite covering all public API, relations, schema, edge cases, events
+  - **553 tests** - comprehensive test suite covering all public API, relations, schema, edge cases and all 15 fixes (SQLite 553, MySQL 554, PostgreSQL 554, MongoDB 279)
   - **Atomic Framework** - prepared for integration into the [Atomic ecosystem](https://github.com/MADEVAL/Atomic-Framework)
   - **Fat-Free Framework** - fully compatible with F3 3.9.x as standalone ORM
 
