@@ -246,6 +246,44 @@ class Test_Constraints {
 		);
 
 		// ========================================================================
+		// 12b. belongs-to-one keeps explicit nullability and selects safe ON DELETE
+		// ========================================================================
+		\AuthorModel::setdown();
+		\StrictNewsModel::setdown();
+		\AuthorModel::setup();
+		\StrictNewsModel::setup();
+
+		$strictAuthorNotNull = null;
+		if (str_contains($db->driver(), 'sqlite')) {
+			$strictCols = $db->exec("PRAGMA table_info(".$db->quotekey('strict_news').")");
+			foreach ($strictCols as $col) {
+				if ($col['name'] === 'author') {
+					$strictAuthorNotNull = (int) $col['notnull'];
+					break;
+				}
+			}
+		} elseif (str_contains($db->driver(), 'mysql')) {
+			$strictCols = $db->exec("SHOW COLUMNS FROM ".$db->quotekey('strict_news')." LIKE ?", ['author']);
+			if (!empty($strictCols))
+				$strictAuthorNotNull = ($strictCols[0]['Null'] === 'NO') ? 1 : 0;
+		} elseif (str_contains($db->driver(), 'pgsql')) {
+			$strictCols = $db->exec(
+				"SELECT is_nullable FROM information_schema.columns
+				WHERE table_name = ? AND column_name = ?",
+				['strict_news', 'author']
+			);
+			if (!empty($strictCols))
+				$strictAuthorNotNull = ($strictCols[0]['is_nullable'] === 'NO') ? 1 : 0;
+		}
+		$test->expect(
+			$strictAuthorNotNull === 1,
+			$type.': belongs-to-one nullable=false creates NOT NULL relation column'
+		);
+
+		\StrictNewsModel::setdown();
+		\AuthorModel::setdown();
+
+		// ========================================================================
 		// 13. hasIndex() returns false for non-existent table
 		// ========================================================================
 		$test->expect(

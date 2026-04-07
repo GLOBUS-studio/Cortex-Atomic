@@ -127,6 +127,7 @@ trait SchemaBuilderTrait {
 					$belongsToFK[$key] = [
 						'table' => $btoRefConf['table'],
 						'column' => $btoRefCol,
+						'onDelete' => static::getBelongsToOnDeleteAction($field),
 					];
 				}
 				// skip virtual fields with no type
@@ -200,7 +201,7 @@ trait SchemaBuilderTrait {
 				if (in_array($ref['table'], $tables))
 					$schema->addForeignKey(
 						$tableName, $col,
-						$ref['table'], $ref['column'], 'SET NULL'
+						$ref['table'], $ref['column'], $ref['onDelete']
 					);
 			}
 		}
@@ -280,7 +281,7 @@ trait SchemaBuilderTrait {
 					if (!$schema->hasForeignKey($table, $key))
 						$schema->addForeignKey(
 							$table, $key,
-							$btoRefConf['table'], $btoRefCol, 'SET NULL'
+							$btoRefConf['table'], $btoRefCol, static::getBelongsToOnDeleteAction($field)
 						);
 				}
 			}
@@ -422,7 +423,8 @@ trait SchemaBuilderTrait {
 				$field['belongs-to-one']['relPK'] = $fc['primary'];
 				$field['type'] = $fc['fieldConf'][$relConf[1]]['type'];
 			}
-			$field['nullable'] = true;
+			if (!array_key_exists('nullable', $field))
+				$field['nullable'] = true;
 			$field['relType'] = 'belongs-to-one';
 		}
 		elseif (array_key_exists('belongs-to-many', $field)){
@@ -468,6 +470,10 @@ trait SchemaBuilderTrait {
 		} elseif(array_key_exists('has-one', $field))
 			$field['relType'] = 'has-one';
 		return $field;
+	}
+
+	protected static function getBelongsToOnDeleteAction(array $field): string {
+		return !empty($field['nullable']) ? 'SET NULL' : 'RESTRICT';
 	}
 
 }
