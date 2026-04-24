@@ -5,7 +5,7 @@ Developed and maintained by [GLOBUS.studio](https://github.com/GLOBUS-studio/Cor
 Based on [Cortex](https://github.com/ikkez/F3-Sugar/tree/master/Cortex) by Christian Knuth (ikkez) for [Fat-Free Framework](https://fatfreeframework.com/).
 
 > PHP 8.0 - 8.5 | SQLite, MySQL, PostgreSQL, SQL Server, MongoDB, Jig
-> 553 tests | GPLv3
+> 577 tests | GPLv3
 
 ### A multi-engine ORM / ODM - Cortex-Atomic
 
@@ -39,7 +39,7 @@ Cortex is a multi-engine ActiveRecord ORM / ODM that offers easy object persiste
     - Pivot table creation with UNIQUE indexes and FK constraints
     - Multi-DB driver coverage: SQLite, MySQL, PostgreSQL, SQL Server, IBM DB2, ODBC
     - Backward-compatible `\DB\SQL\Schema` alias via `class_alias`
-  - **553 tests** - comprehensive test suite covering all public API, relations, schema, edge cases and all 15 fixes (SQLite 553, MySQL 554, PostgreSQL 554, MongoDB 279)
+  - **577 tests** - comprehensive test suite covering all public API, relations, schema, nullability/FK behavior, edge cases and all 15 fixes (SQLite 577, MongoDB 279)
   - **Atomic Framework** - prepared for integration into the [Atomic ecosystem](https://github.com/MADEVAL/Atomic-Framework)
   - **Fat-Free Framework** - fully compatible with F3 3.9.x as standalone ORM
 
@@ -1039,6 +1039,23 @@ protected $fieldConf = [
     ]
 ]
 ```
+
+For **belongs-to-one** relation fields, you can also set:
+
+```php
+'author' => [
+    'belongs-to-one' => '\Model\Author',
+    'nullable' => false,       // default: true — creates NOT NULL column
+    'onDelete' => 'CASCADE',   // default: SET NULL (nullable) or RESTRICT (non-nullable)
+]
+```
+
+The `nullable` flag controls both the SQL column constraint and the FK `ON DELETE` behavior:
+- `nullable => true` (default) — column is `NULL`, FK uses `ON DELETE SET NULL`
+- `nullable => false` — column is `NOT NULL`, FK uses `ON DELETE RESTRICT`
+- explicit `onDelete` — overrides the automatic choice
+
+Setting `nullable => false` on a belongs-to-one field also enables ORM-level validation: attempting to `set()` the field to `NULL` will throw an exception immediately, rather than failing at the database level.
 
 Get the whole list of possible types from the [Schema Data Types](lib/db/cortex/schema/schema.php) (see `$dataTypes` array and `DT_*` constants).
 
@@ -2089,6 +2106,7 @@ Tests run against SQLite (no external DB server required). The suite covers:
 - **Coverage Extra** (76 tests) - compare(), rel(), countRel, fluid SQL mode, touch(), virtual()
 - **Transactions** (22 tests) - implicit transaction commit/rollback, nesting, erase rollback
 - **Constraints** (24 tests) - FK enforcement, pivot UNIQUE, hasForeignKey/hasIndex introspection
+- **Nullability/FK** (26 tests) - belongs-to-one ON DELETE behavior, nullable validation, explicit onDelete
 - **Eager Loading** (23 tests) - with() fluent API, dot-notation, depth-based, filter integration
 - **Edge Cases** (45 tests) - NULL filters, empty strings, orphan records, boundary conditions
 - **Hardened** (118 tests) - stress tests, parser unit tests, reserved words, concurrent updates
@@ -2096,7 +2114,7 @@ Tests run against SQLite (no external DB server required). The suite covers:
 - **IN Syntax** (5 tests) - IN (?) normalization, array expansion, named params
 - **Multi-DB Coverage** (28 tests) - type resolution per driver, DT_* constants
 
-**513 tests total**, all passing on PHP 8.0 - 8.5.
+**577 tests total**, all passing on PHP 8.0 - 8.5.
 
 ### File structure
 
@@ -2113,8 +2131,11 @@ test/
 ├── test_coverage_extra.php # edge cases, fluid mode, events, virtual fields
 ├── test_hardened.php       # stress tests, parser unit tests, reserved word probes
 ├── test_schema.php         # Schema class tests: types, FK, pivot, class_alias
+├── test_nullability_fk.php # nullability/FK ON DELETE behavior tests
 ├── authormodel.php         # test model: Author (has-many News, has-one Profile)
 ├── newsmodel.php           # test model: News (belongs-to-one Author, belongs-to-many Tags)
+├── strictnewsmodel.php     # test model: StrictNews (nullable=false belongs-to-one)
+├── cascadenewsmodel.php    # test model: CascadeNews (onDelete=CASCADE belongs-to-one)
 ├── tagmodel.php            # test model: Tag (has-many News via m:m)
 ├── profilemodel.php        # test model: Profile (belongs-to-one Author)
 └── data/                   # SQLite database (auto-created)

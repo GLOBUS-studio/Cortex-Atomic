@@ -16,8 +16,8 @@
  *  can be waived if you get permission from the copyright holder.
  *
  *  @package DB
- *  @version 2.0.1
- *  @date 30.03.2026
+ *  @version 2.0.2
+ *  @date 25.04.2026
  *  @since 22.01.2013
  */
 

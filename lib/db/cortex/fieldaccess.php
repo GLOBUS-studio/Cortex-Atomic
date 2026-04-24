@@ -209,8 +209,8 @@ trait FieldAccessTrait {
 					return $val;
 				}
 			}
-			// add nullable polyfill
-			if ($val === NULL && ($this->dbsType == 'jig' || $this->dbsType == 'mongo')
+			// validate nullable constraint
+			if ($val === NULL
 				&& array_key_exists('nullable', $fields[$key]) && $fields[$key]['nullable'] === false)
                 throw new \Exception(sprintf(self::E_NULLABLE_COLLISION,$key));
 			// MongoId shorthand

@@ -127,7 +127,7 @@ trait SchemaBuilderTrait {
 					$belongsToFK[$key] = [
 						'table' => $btoRefConf['table'],
 						'column' => $btoRefCol,
-						'onDelete' => static::getBelongsToOnDeleteAction($field),
+						'onDelete' => static::resolveForeignKeyOnDelete($field),
 					];
 				}
 				// skip virtual fields with no type
@@ -281,7 +281,8 @@ trait SchemaBuilderTrait {
 					if (!$schema->hasForeignKey($table, $key))
 						$schema->addForeignKey(
 							$table, $key,
-							$btoRefConf['table'], $btoRefCol, static::getBelongsToOnDeleteAction($field)
+							$btoRefConf['table'], $btoRefCol,
+							static::resolveForeignKeyOnDelete($field)
 						);
 				}
 			}
@@ -429,7 +430,8 @@ trait SchemaBuilderTrait {
 		}
 		elseif (array_key_exists('belongs-to-many', $field)){
 			$field['type'] = self::DT_JSON;
-			$field['nullable'] = true;
+			if (!array_key_exists('nullable', $field))
+				$field['nullable'] = true;
 			$field['relType'] = 'belongs-to-many';
 		}
 		elseif (array_key_exists('has-many', $field)){
@@ -472,8 +474,11 @@ trait SchemaBuilderTrait {
 		return $field;
 	}
 
-	protected static function getBelongsToOnDeleteAction(array $field): string {
-		return !empty($field['nullable']) ? 'SET NULL' : 'RESTRICT';
+	protected static function resolveForeignKeyOnDelete(array $field): string {
+		if (isset($field['onDelete']))
+			return strtoupper((string)$field['onDelete']);
+		return empty($field['nullable']) ? 'RESTRICT' : 'SET NULL';
 	}
 
 }
+

@@ -3,6 +3,37 @@ https://github.com/GLOBUS-studio/Cortex-Atomic
 Part of Atomic Framework: https://github.com/MADEVAL/Atomic-Framework
 Based on Cortex by ikkez (Christian Knuth) for Fat-Free Framework.
 
+2.0.2 (25.04.2026)
+
+  [Bug Fixes]
+- fixed belongs-to-one FK creation ignoring relation nullability
+  - resolveForeignKeyOnDelete() checks for explicit onDelete field config 
+    before falling back to nullable-based default (RESTRICT for NOT NULL, SET NULL for NULL)
+  - nullable => false relations now correctly create NOT NULL columns with
+    ON DELETE RESTRICT foreign keys (previously broke MySQL)
+  - explicit onDelete values such as CASCADE continue to override the default
+- fixed belongs-to-many unconditionally overriding explicit nullable=false
+  - resolveRelationConf() now only defaults nullable=true when key is absent,
+    consistent with the belongs-to-one fix
+- fixed ORM-level nullable validation skipping SQL backends
+  - set() now throws E_NULLABLE_COLLISION on all backends (was Jig/Mongo only)
+  - provides clear ORM exception instead of cryptic PDOException
+- fixed ConstraintAdapter::addBelongsToForeignKey() default from SET NULL to RESTRICT
+  - aligns deprecated facade with corrected core behavior
+
+  [Test Suite]
+- php test/run.php (SQLite): 577 tests, all passing; includes Test_Nullability_FK
+  (FK delete-behavior subcases are skipped on SQLite with passing placeholders;
+  see test file comments - ALTER TABLE / second-pass FK limitations)
+- php test/run_mysql.php and php test/run_pgsql.php: now run Test_Nullability_FK
+  (same order as run.php; previously these runners omitted it, so live FK checks
+  never ran there). 586 tests per engine, all passing, including SET NULL /
+  RESTRICT / CASCADE after setupForeignKeys()
+- added test/test_nullability_fk.php: nullability/FK suite (resolveForeignKeyOnDelete,
+  DDL column nullability, ORM set() nullable, resolveRelationConf, ConstraintAdapter,
+  setupForeignKeys idempotency; live ON DELETE checks on MySQL/PostgreSQL only)
+- added test/cascadenewsmodel.php: model with explicit onDelete => CASCADE
+
 2.0.1 (30.03.2026)
 
   [Bug Fixes]

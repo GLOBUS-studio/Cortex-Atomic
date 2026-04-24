@@ -117,6 +117,13 @@ foreach ($dbs as $type => $db) {
     $results = array_merge($results, (array)$test->run($db, $type));
 }
 
+// Test Nullability/FK (belongs-to-one nullability + ON DELETE behavior)
+foreach ($dbs as $type => $db) {
+    $f3->set('DB', $db);
+    $test = new \Test_Nullability_FK();
+    $results = array_merge($results, (array)$test->run($db, $type));
+}
+
 // Test Fixes (#7–#21 regression/coverage tests)
 foreach ($dbs as $type => $db) {
     $f3->set('DB', $db);

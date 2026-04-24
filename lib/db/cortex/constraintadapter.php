@@ -137,17 +137,18 @@ class ConstraintAdapter {
 
 	/**
 	 * Add FK for a belongs-to-one column
+	 * @deprecated Use Schema::addForeignKey() directly
 	 * @param SQL $db
 	 * @param string $table
 	 * @param string $column
 	 * @param string $refTable
 	 * @param string $refColumn
-	 * @param string $onDelete
+	 * @param string $onDelete ON DELETE action (default: RESTRICT)
 	 * @return bool
 	 */
 	static function addBelongsToForeignKey(SQL $db, string $table, string $column,
 		string $refTable, string $refColumn = 'id',
-		string $onDelete = 'SET NULL'): bool
+		string $onDelete = 'RESTRICT'): bool
 	{
 		return (new Schema($db))->addForeignKey($table, $column, $refTable, $refColumn, $onDelete);
 	}
