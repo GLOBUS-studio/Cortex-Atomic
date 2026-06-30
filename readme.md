@@ -1,5 +1,9 @@
 # Cortex-Atomic
 
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
+[![PHP](https://img.shields.io/badge/PHP-%3E%3D8.0-777BB4.svg)](https://www.php.net/)
+[![Tests](https://img.shields.io/badge/tests-577%20passed-brightgreen)]()
+
 **A multi-engine ORM / ODM for [Atomic Framework](https://github.com/MADEVAL/Atomic-Framework)**
 Developed and maintained by [GLOBUS.studio](https://github.com/GLOBUS-studio/Cortex-Atomic).
 Based on [Cortex](https://github.com/ikkez/F3-Sugar/tree/master/Cortex) by Christian Knuth (ikkez) for [Fat-Free Framework](https://fatfreeframework.com/).
