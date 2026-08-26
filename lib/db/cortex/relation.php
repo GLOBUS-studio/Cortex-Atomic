@@ -262,9 +262,11 @@ trait RelationTrait {
 				.' WHERE '.$alias_r.'.'.$qRelPK.'=__btm_je.value'
 				.($relWhere?' AND ('.$relWhere.')':'').')';
 		} elseif ($driver=='mysql') {
-			// MySQL 5.7+ JSON_CONTAINS()
+			// MySQL 5.7+ / MariaDB 10.2+ JSON_CONTAINS()
+			// cast to CHAR, not JSON: MariaDB has no JSON cast target,
+			// and a numeric PK rendered as CHAR is still valid JSON on both
 			$exists = 'EXISTS(SELECT 1 FROM '.$qRelTable.' '.$alias_r
-				.' WHERE JSON_CONTAINS('.$qKey.',CAST('.$alias_r.'.'.$qRelPK.' AS JSON))'
+				.' WHERE JSON_CONTAINS('.$qKey.',CAST('.$alias_r.'.'.$qRelPK.' AS CHAR))'
 				.($relWhere?' AND ('.$relWhere.')':'').')';
 		} elseif ($driver=='pgsql') {
 			// PostgreSQL json_array_elements_text()
