@@ -166,7 +166,7 @@ class TableModifier extends TableBuilder {
 		foreach ($existing_columns as $name=>$col) {
 			$colName=array_key_exists($name,$rename)?$rename[$name]:$name;
 			// update column datatype
-			if (array_key_exists('update',$this->rebuild_cmd)
+			if (!empty($this->rebuild_cmd) && array_key_exists('update',$this->rebuild_cmd)
 				&& in_array($name,array_keys($this->rebuild_cmd['update']))) {
 				$cdat=$this->rebuild_cmd['update'][$name];
 				if ($cdat instanceof Column)

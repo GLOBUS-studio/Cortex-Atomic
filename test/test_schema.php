@@ -419,10 +419,73 @@ class Test_Schema {
 		$schema->dropTable($tDefault);
 
 		// ========================================================================
+		// 14. Add TIMESTAMP + CURRENT_TIMESTAMP to an existing table
+		// SQLite cannot ALTER-add a dynamic default; it rebuilds the table.
+		// The rebuild used to TypeError: unguarded rebuild_cmd['update'] and
+		// dropTable() reading a protected TableBuilder::$name.
+		// ========================================================================
+		$tStamp = 'test_schema_stamp';
+		if (in_array($tStamp, $schema->getTables()))
+			$schema->dropTable($tStamp);
+		$tcStamp = $schema->createTable($tStamp);
+		$tcStamp->addColumn('label')->type(\DB\Cortex\Schema\Schema::DT_VARCHAR256);
+		$tcStamp->build();
+		$db->exec("INSERT INTO ".$db->quotekey($tStamp)
+			." (".$db->quotekey('label').") VALUES (?)", ['kept']);
+
+		$built = false;
+		$buildErr = '';
+		try {
+			$tmStamp = $schema->alterTable($tStamp);
+			$tmStamp->addColumn('stamp')->type(\DB\Cortex\Schema\Schema::DT_TIMESTAMP)
+				->defaults(\DB\Cortex\Schema\Schema::DF_CURRENT_TIMESTAMP);
+			$tmStamp->build();
+			$built = true;
+		} catch (\Throwable $e) {
+			$buildErr = $e->getMessage();
+		}
+		$test->expect(
+			$built,
+			$type.': add TIMESTAMP CURRENT_TIMESTAMP to existing table'
+				.($buildErr ? ' ('.$buildErr.')' : '')
+		);
+
+		$colsStamp = $built ? $schema->alterTable($tStamp)->getCols() : [];
+		$test->expect(
+			in_array('stamp', $colsStamp),
+			$type.': TIMESTAMP column exists after alter'
+		);
+
+		$rowKept = $built ? $db->exec("SELECT ".$db->quotekey('label')
+			." FROM ".$db->quotekey($tStamp)
+			." WHERE ".$db->quotekey('label')." = ?", ['kept']) : [];
+		$test->expect(
+			isset($rowKept[0]['label']) && $rowKept[0]['label'] === 'kept',
+			$type.': existing rows survive TIMESTAMP alter'
+		);
+
+		if ($built) {
+			$db->exec("INSERT INTO ".$db->quotekey($tStamp)
+				." (".$db->quotekey('label').") VALUES (?)", ['after']);
+			$rowAfter = $db->exec("SELECT ".$db->quotekey('stamp')
+				." FROM ".$db->quotekey($tStamp)
+				." WHERE ".$db->quotekey('label')." = ?", ['after']);
+			$stampVal = $rowAfter[0]['stamp'] ?? null;
+			$test->expect(
+				$stampVal !== null && $stampVal !== '',
+				$type.': omit-column insert applies CURRENT_TIMESTAMP'
+			);
+		} else {
+			$test->expect(false, $type.': omit-column insert applies CURRENT_TIMESTAMP');
+		}
+		if (in_array($tStamp, $schema->getTables()))
+			$schema->dropTable($tStamp);
+
+		// ========================================================================
 		// CLEANUP
 		// ========================================================================
 		foreach (['stest_rpivot', 'stest_child', 'stest_pivot', 'stest_b', 'stest_a',
-			'test_schema_defraw'] as $t)
+			'test_schema_defraw', 'test_schema_stamp'] as $t)
 			if (in_array($t, $schema->getTables()))
 				$schema->dropTable($t);
 
@@ -460,6 +523,25 @@ class Test_Schema {
 				'nullable' => $cols[0]['is_nullable'] === 'YES',
 				'default' => $default === null ? null : (string)$default,
 				'type' => (string)$cols[0]['data_type'],
+			];
+		}
+		if (str_contains($driver, 'sqlsrv') || str_contains($driver, 'mssql')) {
+			$cols = $db->exec(
+				"SELECT IS_NULLABLE, COLUMN_DEFAULT, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+				 WHERE TABLE_NAME = ? AND COLUMN_NAME = ?",
+				[$table, $column]
+			);
+			if (empty($cols))
+				return null;
+			$default = $cols[0]['COLUMN_DEFAULT'];
+			if ($default !== null && preg_match("/^\(?\s*'?(.*?)'?\s*\)?$/", (string)$default, $m))
+				$default = $m[1];
+			if ($default !== null && preg_match("/^'?(-?\d+)/", (string)$default, $m))
+				$default = $m[1];
+			return [
+				'nullable' => $cols[0]['IS_NULLABLE'] === 'YES',
+				'default' => ($default === null || $default === '') ? null : (string)$default,
+				'type' => (string)$cols[0]['DATA_TYPE'],
 			];
 		}
 		return null;

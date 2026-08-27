@@ -311,7 +311,7 @@ class Schema {
 	 */
 	public function dropTable($name,$exec=TRUE) {
 		if (is_object($name) && $name instanceof TableBuilder)
-			$name=$name->name;
+			$name=$name->getName();
 		$cmd=[
 			'mysql|ibm|sqlite2?|pgsql|sybase|dblib'=>
 				'DROP TABLE IF EXISTS '.$this->db->quotekey($name).';',
@@ -330,7 +330,7 @@ class Schema {
 	 */
 	public function truncateTable($name,$exec=TRUE) {
 		if (is_object($name) && $name instanceof TableBuilder)
-			$name=$name->name;
+			$name=$name->getName();
 		$cmd=[
 			'mysql|ibm|pgsql|sybase|dblib|mssql|sqlsrv|odbc'=>
 				'TRUNCATE TABLE '.$this->db->quotekey($name).';',
