@@ -280,8 +280,7 @@ class Column {
 			$pdo_type=preg_match('/int|bool/i',$type_val,$parts)?
 				constant('\PDO::PARAM_'.strtoupper($parts[0])):PDO::PARAM_STR;
 			return ($this->default===NULL?'NULL':
-				$this->db->quote(htmlspecialchars($this->default,ENT_QUOTES,
-					Base::instance()->get('ENCODING')),$pdo_type));
+				$this->db->quote($this->default,$pdo_type));
 		}
 	}
 }

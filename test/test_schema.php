@@ -376,9 +376,53 @@ class Test_Schema {
 		}
 
 		// ========================================================================
+		// 13. Column defaults are SQL-quoted, not HTML-encoded
+		// htmlspecialchars() before quote() stored Tom &amp; Jerry instead of
+		// Tom & Jerry. quote() already makes the DDL literal safe.
+		// CREATE TABLE (not ALTER rebuild), so SQLite is included.
+		// ========================================================================
+		$tDefault = 'test_schema_defraw';
+		if (in_array($tDefault, $schema->getTables()))
+			$schema->dropTable($tDefault);
+		$amp = 'Tom & Jerry';
+		$html = '<b>a&b</b>';
+		$apos = "O'Brien";
+		$tcDefault = $schema->createTable($tDefault);
+		$tcDefault->addColumn('label')->type(\DB\Cortex\Schema\Schema::DT_VARCHAR256);
+		$tcDefault->addColumn('amp')->type(\DB\Cortex\Schema\Schema::DT_VARCHAR256)
+			->defaults($amp);
+		$tcDefault->addColumn('html')->type(\DB\Cortex\Schema\Schema::DT_VARCHAR256)
+			->defaults($html);
+		$tcDefault->addColumn('apos')->type(\DB\Cortex\Schema\Schema::DT_VARCHAR256)
+			->defaults($apos);
+		$tcDefault->build();
+
+		$db->exec("INSERT INTO ".$db->quotekey($tDefault)
+			." (".$db->quotekey('label').") VALUES (?)", ['omit']);
+		$rowDef = $db->exec("SELECT ".$db->quotekey('amp').", "
+			.$db->quotekey('html').", ".$db->quotekey('apos')
+			." FROM ".$db->quotekey($tDefault)
+			." WHERE ".$db->quotekey('label')." = ?", ['omit']);
+		$got = $rowDef[0] ?? [];
+		$test->expect(
+			isset($got['amp']) && $got['amp'] === $amp,
+			$type.': VARCHAR default preserves & (not HTML-encoded)'
+		);
+		$test->expect(
+			isset($got['html']) && $got['html'] === $html,
+			$type.': VARCHAR default preserves HTML tags and &'
+		);
+		$test->expect(
+			isset($got['apos']) && $got['apos'] === $apos,
+			$type.': VARCHAR default preserves apostrophe via SQL quoting'
+		);
+		$schema->dropTable($tDefault);
+
+		// ========================================================================
 		// CLEANUP
 		// ========================================================================
-		foreach (['stest_rpivot', 'stest_child', 'stest_pivot', 'stest_b', 'stest_a'] as $t)
+		foreach (['stest_rpivot', 'stest_child', 'stest_pivot', 'stest_b', 'stest_a',
+			'test_schema_defraw'] as $t)
 			if (in_array($t, $schema->getTables()))
 				$schema->dropTable($t);
 
