@@ -377,8 +377,22 @@ class TableModifier extends TableBuilder {
 		if (strpos($this->db->driver(),'sqlite')!==FALSE) {
 			$this->rebuild_cmd['update'][$name]=isset($col)?$col:$datatype;
 		} else {
-			$dat=isset($col)?$col->getColumnQuery():
-				$column.' '.$datatype;
+			if (isset($col))
+				$dat=$col->getColumnQuery();
+			elseif (strpos($this->db->driver(),'mysql')!==FALSE) {
+				// MODIFY COLUMN replaces the whole definition.
+				// Re-emit nullability + default from the live column so a
+				// bare type string does not drop them.
+				$existing=$this->getCols(TRUE);
+				if (isset($existing[$name])) {
+					$preserved=new Column($name,$this);
+					$preserved->copyfrom($existing[$name]);
+					$preserved->type($datatype,TRUE);
+					$dat=$preserved->getColumnQuery();
+				} else
+					$dat=$column.' '.$datatype;
+			} else
+				$dat=$column.' '.$datatype;
 			$cmd=[
 				'mysql'=>
 					"ALTER TABLE $table MODIFY COLUMN $dat;",

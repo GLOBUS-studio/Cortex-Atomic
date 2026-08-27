@@ -311,6 +311,71 @@ class Test_Schema {
 		}
 
 		// ========================================================================
+		// 12. updateColumn() with a bare type keeps NOT NULL and DEFAULT
+		// MySQL/MariaDB MODIFY COLUMN rewrites the whole column; type-only SQL drops both.
+		// SQLite update goes through _sqlite_rebuild() — a separate known failure.
+		// PostgreSQL ALTER COLUMN … TYPE already preserves constraints (parity check).
+		// ========================================================================
+		if (!str_contains($db->driver(), 'sqlite')) {
+			$tUpdate = 'test_schema_update';
+			if (in_array($tUpdate, $schema->getTables()))
+				$schema->dropTable($tUpdate);
+			$tcUpdate = $schema->createTable($tUpdate);
+			$tcUpdate->addColumn('num')->type(\DB\Cortex\Schema\Schema::DT_INT4)
+				->nullable(false)->defaults(7);
+			$tcUpdate->addColumn('label')->type(\DB\Cortex\Schema\Schema::DT_VARCHAR256);
+			$tcUpdate->build();
+			$db->exec("INSERT INTO ".$db->quotekey($tUpdate)
+				." (".$db->quotekey('label').") VALUES (?)", ['kept']);
+			$tmUpdate = $schema->alterTable($tUpdate);
+			$tmUpdate->updateColumn('num', \DB\Cortex\Schema\Schema::DT_INT8);
+			$tmUpdate->build();
+
+			$meta = $this->columnMeta($db, $tUpdate, 'num');
+			$test->expect(
+				$meta !== null && stripos((string)$meta['type'], 'bigint') !== false,
+				$type.': updateColumn() changes INT4 to INT8/bigint'
+			);
+			$test->expect(
+				$meta !== null && $meta['nullable'] === false,
+				$type.': updateColumn() preserves NOT NULL'
+			);
+			$test->expect(
+				$meta !== null && (string)$meta['default'] === '7',
+				$type.': updateColumn() preserves DEFAULT 7'
+			);
+
+			$rowUpdate = $db->exec("SELECT ".$db->quotekey('num')." FROM ".$db->quotekey($tUpdate));
+			$test->expect(
+				isset($rowUpdate[0]['num']) && $rowUpdate[0]['num']==7,
+				$type.': updateColumn() preserves existing values'
+			);
+
+			$db->exec("INSERT INTO ".$db->quotekey($tUpdate)
+				." (".$db->quotekey('label').") VALUES (?)", ['after']);
+			$rowAfter = $db->exec("SELECT ".$db->quotekey('num')." FROM ".$db->quotekey($tUpdate)
+				." WHERE ".$db->quotekey('label')." = ?", ['after']);
+			$test->expect(
+				isset($rowAfter[0]['num']) && $rowAfter[0]['num']==7,
+				$type.': updateColumn() still applies DEFAULT on insert'
+			);
+
+			$nullRejected = false;
+			try {
+				$db->exec("INSERT INTO ".$db->quotekey($tUpdate)
+					." (".$db->quotekey('num').", ".$db->quotekey('label').") VALUES (?, ?)",
+					[null, 'nulls']);
+			} catch (\Exception $e) {
+				$nullRejected = true;
+			}
+			$test->expect(
+				$nullRejected,
+				$type.': updateColumn() still rejects NULL after type change'
+			);
+			$schema->dropTable($tUpdate);
+		}
+
+		// ========================================================================
 		// CLEANUP
 		// ========================================================================
 		foreach (['stest_rpivot', 'stest_child', 'stest_pivot', 'stest_b', 'stest_a'] as $t)
@@ -322,7 +387,7 @@ class Test_Schema {
 
 	/**
 	 * Nullability + default from the engine catalog, not Cortex getCols().
-	 * @return array{nullable:bool,default:?string}|null
+	 * @return array{nullable:bool,default:?string,type:string}|null
 	 */
 	private function columnMeta($db, string $table, string $column): ?array {
 		$driver = $db->driver();
@@ -333,11 +398,12 @@ class Test_Schema {
 			return [
 				'nullable' => $cols[0]['Null'] === 'YES',
 				'default' => $cols[0]['Default'] === null ? null : (string)$cols[0]['Default'],
+				'type' => (string)$cols[0]['Type'],
 			];
 		}
 		if (str_contains($driver, 'pgsql')) {
 			$cols = $db->exec(
-				"SELECT is_nullable, column_default FROM information_schema.columns
+				"SELECT is_nullable, column_default, data_type FROM information_schema.columns
 				 WHERE table_schema = current_schema() AND table_name = ? AND column_name = ?",
 				[$table, $column]
 			);
@@ -349,6 +415,7 @@ class Test_Schema {
 			return [
 				'nullable' => $cols[0]['is_nullable'] === 'YES',
 				'default' => $default === null ? null : (string)$default,
+				'type' => (string)$cols[0]['data_type'],
 			];
 		}
 		return null;
