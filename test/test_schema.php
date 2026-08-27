@@ -241,6 +241,76 @@ class Test_Schema {
 		);
 
 		// ========================================================================
+		// 11. renameColumn() keeps NOT NULL and DEFAULT
+		// MySQL/MariaDB CHANGE rewrites the whole column; type-only SQL drops both.
+		// SQLite rename goes through _sqlite_rebuild() - a separate known failure.
+		// PostgreSQL RENAME COLUMN already preserves constraints (parity check).
+		// ========================================================================
+		if (!str_contains($db->driver(), 'sqlite')) {
+			$tRename = 'test_schema_rename';
+			if (in_array($tRename, $schema->getTables()))
+				$schema->dropTable($tRename);
+			$tcRename = $schema->createTable($tRename);
+			$tcRename->addColumn('num')->type(\DB\Cortex\Schema\Schema::DT_INT4)
+				->nullable(false)->defaults(7);
+			$tcRename->addColumn('label')->type(\DB\Cortex\Schema\Schema::DT_VARCHAR256);
+			$tcRename->build();
+			$db->exec("INSERT INTO ".$db->quotekey($tRename)
+				." (".$db->quotekey('label').") VALUES (?)", ['kept']);
+			$tmRename = $schema->alterTable($tRename);
+			$tmRename->renameColumn('num','num2');
+			$tmRename->build();
+
+			$colsRename = $schema->alterTable($tRename)->getCols(TRUE);
+			$test->expect(
+				isset($colsRename['num2']) && !isset($colsRename['num']),
+				$type.': renameColumn() renames num to num2'
+			);
+
+			// Engine catalogs, not getCols() - same source SHOW COLUMNS would use.
+			$meta = $this->columnMeta($db, $tRename, 'num2');
+			$test->expect(
+				$meta !== null && $meta['nullable'] === false,
+				$type.': renameColumn() preserves NOT NULL'
+			);
+			$test->expect(
+				$meta !== null && (string)$meta['default'] === '7',
+				$type.': renameColumn() preserves DEFAULT 7'
+			);
+
+			// Existing values survive even on the broken CHANGE - sanity only.
+			$rowRename = $db->exec("SELECT ".$db->quotekey('num2')." FROM ".$db->quotekey($tRename));
+			$test->expect(
+				isset($rowRename[0]['num2']) && $rowRename[0]['num2']==7,
+				$type.': renameColumn() preserves existing values'
+			);
+
+			// Omitting the column must still apply DEFAULT 7. Broken CHANGE inserts NULL.
+			$db->exec("INSERT INTO ".$db->quotekey($tRename)
+				." (".$db->quotekey('label').") VALUES (?)", ['after']);
+			$rowAfter = $db->exec("SELECT ".$db->quotekey('num2')." FROM ".$db->quotekey($tRename)
+				." WHERE ".$db->quotekey('label')." = ?", ['after']);
+			$test->expect(
+				isset($rowAfter[0]['num2']) && $rowAfter[0]['num2']==7,
+				$type.': renameColumn() still applies DEFAULT on insert'
+			);
+
+			$nullRejected = false;
+			try {
+				$db->exec("INSERT INTO ".$db->quotekey($tRename)
+					." (".$db->quotekey('num2').", ".$db->quotekey('label').") VALUES (?, ?)",
+					[null, 'nulls']);
+			} catch (\Exception $e) {
+				$nullRejected = true;
+			}
+			$test->expect(
+				$nullRejected,
+				$type.': renameColumn() still rejects NULL after rename'
+			);
+			$schema->dropTable($tRename);
+		}
+
+		// ========================================================================
 		// CLEANUP
 		// ========================================================================
 		foreach (['stest_rpivot', 'stest_child', 'stest_pivot', 'stest_b', 'stest_a'] as $t)
@@ -248,5 +318,39 @@ class Test_Schema {
 				$schema->dropTable($t);
 
 		return $test->results();
+	}
+
+	/**
+	 * Nullability + default from the engine catalog, not Cortex getCols().
+	 * @return array{nullable:bool,default:?string}|null
+	 */
+	private function columnMeta($db, string $table, string $column): ?array {
+		$driver = $db->driver();
+		if (str_contains($driver, 'mysql')) {
+			$cols = $db->exec("SHOW COLUMNS FROM ".$db->quotekey($table)." LIKE ?", [$column]);
+			if (empty($cols))
+				return null;
+			return [
+				'nullable' => $cols[0]['Null'] === 'YES',
+				'default' => $cols[0]['Default'] === null ? null : (string)$cols[0]['Default'],
+			];
+		}
+		if (str_contains($driver, 'pgsql')) {
+			$cols = $db->exec(
+				"SELECT is_nullable, column_default FROM information_schema.columns
+				 WHERE table_schema = current_schema() AND table_name = ? AND column_name = ?",
+				[$table, $column]
+			);
+			if (empty($cols))
+				return null;
+			$default = $cols[0]['column_default'];
+			if ($default !== null && preg_match("/^'?(-?\d+)/", (string)$default, $m))
+				$default = $m[1];
+			return [
+				'nullable' => $cols[0]['is_nullable'] === 'YES',
+				'default' => $default === null ? null : (string)$default,
+			];
+		}
+		return null;
 	}
 }

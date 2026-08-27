@@ -336,14 +336,17 @@ class TableModifier extends TableBuilder {
 			$this->queries[]="UPDATE $this->name SET $new_name = $name";
 			$this->dropColumn($name);
 		} else {
-			$existing_columns=$this->getCols(TRUE);
 			$quotedTable=$this->db->quotekey($this->name);
 			$quotedColumn=$this->db->quotekey($name);
 			$quotedColumnNew=$this->db->quotekey($new_name);
+			// MySQL CHANGE replaces the whole column definition.
+			// Re-emit type + nullability + default so they are not dropped.
+			$col=new Column($new_name,$this);
+			$col->copyfrom($existing_columns[$name]);
+			$col->passThrough();
 			$cmd=[
 				'mysql'=>
-					"ALTER TABLE $quotedTable CHANGE $quotedColumn $quotedColumnNew ".
-					$existing_columns[$name]['type'].";",
+					"ALTER TABLE $quotedTable CHANGE $quotedColumn ".$col->getColumnQuery().";",
 				'pgsql|ibm'=>
 					"ALTER TABLE $quotedTable RENAME COLUMN $quotedColumn TO $quotedColumnNew;",
 				'mssql|sybase|dblib|sqlsrv'=>
