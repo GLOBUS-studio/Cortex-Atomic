@@ -296,8 +296,12 @@ class CortexQueryParser extends \Prefab {
 
 	/**
 	 * find and wrap logical operators AND, OR, (, )
+	 *
+	 * SQL precedence: AND binds tighter than OR. Mixed operators at the same
+	 * nesting level become $or of $and-groups, matching the SQL engines.
+	 *
 	 * @param $parts
-	 * @return array
+	 * @return array|null
 	 */
 	protected function _mongo_parse_logical_op($parts) {
 		$b_offset = 0;
@@ -327,25 +331,47 @@ class CortexQueryParser extends \Prefab {
 			elseif ($b_offset > 0) {
 				// add to parse array
 				$child[]=$part;
-				// condition type
-			} elseif (!is_array($part)) {
-				if (strtoupper($part) == 'AND')
-					$add = true;
-				elseif (strtoupper($part) == 'OR')
-					$or = true;
-			} else // skip
+			} elseif (is_string($part) && strtoupper($part) == 'AND') {
+				$ncond[] = 'AND';
+			} elseif (is_string($part) && strtoupper($part) == 'OR') {
+				$ncond[] = 'OR';
+			} elseif (is_array($part)) {
 				$ncond[] = $part;
+			}
 		}
 		if ($b_offset > 0)
             throw new \Exception(self::E_BRACKETS);
-		if (isset($add))
-			return ['$and' => $ncond];
-		elseif (isset($or))
-			return ['$or' => $ncond];
-		elseif (!empty($ncond))
-			return $ncond[0];
-		else
+		return $this->_mongo_apply_logical_precedence($ncond);
+	}
+
+	/**
+	 * join parsed Mongo conditions with SQL AND/OR precedence
+	 * @param array $tokens
+	 * @return array|null
+	 */
+	protected function _mongo_apply_logical_precedence(array $tokens) {
+		if (empty($tokens))
 			return null;
+		$orGroups = [[]];
+		foreach ($tokens as $token) {
+			if ($token === 'OR')
+				$orGroups[] = [];
+			elseif ($token !== 'AND')
+				$orGroups[count($orGroups) - 1][] = $token;
+		}
+		$orParts = [];
+		foreach ($orGroups as $group) {
+			if (empty($group))
+				continue;
+			$orParts[] = (count($group) === 1)
+				? $group[0]
+				: ['$and' => $group];
+		}
+		if (empty($orParts))
+			return null;
+		if (count($orParts) === 1)
+			return $orParts[0];
+		return ['$or' => $orParts];
 	}
 
 	/**

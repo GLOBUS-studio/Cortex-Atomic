@@ -279,6 +279,37 @@ class Test_Syntax {
 			$type.': check logical operator chaining'
 		);
 
+		// mixed AND/OR without parentheses — AND binds tighter, same rows as above
+		$result = $this->getResult($cx->find(
+			array('num2 < ? AND num1 > ? OR title like ?', 2, 1, '%o9')));
+		$test->expect(
+			json_encode($result) == json_encode($expected),
+			$type.': mixed AND/OR without parentheses (AND tighter than OR)'
+		);
+
+		// A OR B AND C — not (A OR B) AND C: foo9 matches LIKE even though num2 is unset
+		$result = $this->getResult($cx->find(
+			array('title like ? OR num1 > ? AND num2 < ?', '%o9', 1, 2)));
+		$titles = array_column($result, 'title');
+		sort($titles);
+		$test->expect(
+			$titles === ['foo6', 'foo9'],
+			$type.': mixed OR/AND without parentheses (AND tighter than OR)'
+		);
+
+		if (str_contains($type, 'mongo')) {
+			$qp = \DB\Cortex\CortexQueryParser::instance();
+			$parsed = $qp->prepareFilter(
+				['a = ? OR b = ? AND c = ?', 1, 2, 3], 'mongo', $db);
+			$test->expect(
+				isset($parsed['$or']) && count($parsed['$or']) === 2
+				&& $parsed['$or'][0] === ['a' => 1]
+				&& isset($parsed['$or'][1]['$and'])
+				&& $parsed['$or'][1]['$and'] === [['b' => 2], ['c' => 3]],
+				$type.': prepareFilter mixed OR/AND emits $or of $and-group'
+			);
+		}
+
 		// check limit
 		$result = $this->getResult($cx->find(null, array('limit' => 2)));
 		$expected = array(
