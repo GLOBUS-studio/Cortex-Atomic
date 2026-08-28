@@ -389,9 +389,9 @@ class CortexQueryParser extends \Prefab {
 	protected function _mongo_parse_relational_op($part, &$args, \DB\Mongo $db, $fieldConf=null) {
 		if (is_null($part))
 			return $part;
-		if (preg_match('/\<\=|\>\=|\<\>|\<|\>|\!\=|\=\=|\=|like|not like|in|not in/i', $part, $match)) {
+		if (preg_match('/<=|>=|<>|!=|==?|<|>|\bnot\s+like\b|\blike\b|\bnot\s+in\b|\bin\b/i', $part, $match)) {
 			$var = str_contains($part, '?') ? array_shift($args) : null;
-			$exp = explode($match[0], $part);
+			$exp = explode($match[0], $part, 2);
 			$key = trim($exp[0]);
 			// unbound value
 			if (is_numeric($exp[1]))
@@ -399,7 +399,7 @@ class CortexQueryParser extends \Prefab {
 			// field comparison
 			elseif (!str_contains($exp[1], '?'))
 				return ['$where' => 'this.'.$key.' '.$match[0].' this.'.trim($exp[1])];
-			$upart = strtoupper($match[0]);
+			$upart = preg_replace('/\s+/', ' ', strtoupper(trim($match[0])));
 			// MongoID shorthand
 			if ($key == '_id' || (isset($fieldConf[$key]) && isset($fieldConf[$key]['relType']))) {
 				if (is_null($var)) {

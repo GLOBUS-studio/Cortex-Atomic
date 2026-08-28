@@ -368,7 +368,7 @@ class Test_Fixes {
         }
 
         // ====================================================================
-        // #22 Operator parsing: lowercase IN (SQL)
+        // #22 Operator parsing: lowercase IN (SQL) + word boundaries (Mongo)
         // ====================================================================
         $qp22 = new \DB\CortexQueryParser();
 
@@ -397,6 +397,67 @@ class Test_Fixes {
             for ($i = 0; $i < 3; $i++)
                 $test->expect(true, $type.': #22 SQL parser skip (non-SQL)');
         }
+
+        if ($isMongo) {
+            // `in` inside an identifier must not be read as the IN operator
+            $f22d = $qp22->prepareFilter(['domain = ?', 'x'], 'mongo', $db);
+            $test->expect(
+                is_array($f22d) && array_key_exists('domain', $f22d) && $f22d['domain'] === 'x',
+                $type.': #22 Mongo: `domain` not split on inner `in`'
+            );
+
+            $f22e = $qp22->prepareFilter(['min > ?', 5], 'mongo', $db);
+            $test->expect(
+                is_array($f22e) && isset($f22e['min']['$gt']) && $f22e['min']['$gt'] == 5,
+                $type.': #22 Mongo: `min` not split on inner `in`'
+            );
+
+            // `like` inside an identifier must not be read as the LIKE operator
+            $f22f = $qp22->prepareFilter(['dislike = ?', 'x'], 'mongo', $db);
+            $test->expect(
+                is_array($f22f) && array_key_exists('dislike', $f22f) && $f22f['dislike'] === 'x',
+                $type.': #22 Mongo: `dislike` not split on inner `like`'
+            );
+
+            // field name containing `in` combined with the real IN operator
+            $f22g = $qp22->prepareFilter(['points not in ?', [1,2]], 'mongo', $db);
+            $test->expect(
+                is_array($f22g) && isset($f22g['points']['$nin'])
+                    && $f22g['points']['$nin'] === [1,2],
+                $type.': #22 Mongo: `points not in ?` maps to $nin on `points`'
+            );
+
+            // lowercase operator still resolves
+            $f22h = $qp22->prepareFilter(['name in ?', ['Alice','Bob']], 'mongo', $db);
+            $test->expect(
+                is_array($f22h) && isset($f22h['name']['$in']),
+                $type.': #22 Mongo: lowercase `in` maps to $in'
+            );
+        } else {
+            for ($i = 0; $i < 5; $i++)
+                $test->expect(true, $type.': #22 Mongo parser skip (non-Mongo)');
+        }
+
+        // end-to-end: lowercase `in` must match uppercase `IN` on every engine
+        foreach (['In22A','In22B','In22C'] as $n22) {
+            $seed22 = new \AuthorModel();
+            $seed22->name = $n22;
+            $seed22->save();
+        }
+        $names22 = ['In22A','In22B'];
+        $ref22 = (new \AuthorModel())->find(['name IN ?', $names22]);
+        $low22 = (new \AuthorModel())->find(['name in ?', $names22]);
+        $test->expect(
+            $ref22 && $low22 && count($ref22) === count($low22) && count($low22) > 0,
+            $type.': #22 find() lowercase `in` matches uppercase `IN`'
+        );
+
+        $refN22 = (new \AuthorModel())->find(['name NOT IN ?', $names22]);
+        $lowN22 = (new \AuthorModel())->find(['name not in ?', $names22]);
+        $test->expect(
+            $refN22 && $lowN22 && count($refN22) === count($lowN22) && count($lowN22) > 0,
+            $type.': #22 find() lowercase `not in` matches uppercase `NOT IN`'
+        );
 
         return $test->results();
     }
