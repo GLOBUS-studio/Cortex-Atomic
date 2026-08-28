@@ -367,6 +367,37 @@ class Test_Fixes {
                 $test->expect(true, $type.': #21 Schema skip (non-SQL)');
         }
 
+        // ====================================================================
+        // #22 Operator parsing: lowercase IN (SQL)
+        // ====================================================================
+        $qp22 = new \DB\CortexQueryParser();
+
+        if ($isSql) {
+            // lowercase `in` must expand exactly like uppercase `IN`
+            $f22a = $qp22->prepareFilter(['id in ?', [1,2,3]], 'sql', $db);
+            $test->expect(
+                is_array($f22a) && str_contains($f22a[0], 'IN (?,?,?)') && count($f22a) === 4,
+                $type.': #22 lowercase `in` expands to IN (?,?,?)'
+            );
+
+            // mixed case plus extra spaces
+            $f22b = $qp22->prepareFilter(['id  In   ?', [1,2]], 'sql', $db);
+            $test->expect(
+                is_array($f22b) && str_contains($f22b[0], 'IN (?,?)') && count($f22b) === 3,
+                $type.': #22 mixed-case `In` with extra spaces expands'
+            );
+
+            // lowercase `not in` keeps the NOT prefix
+            $f22c = $qp22->prepareFilter(['id not in ?', [1,2]], 'sql', $db);
+            $test->expect(
+                is_array($f22c) && preg_match('/not\s+in\s*\(\?,\?\)/i', $f22c[0]) === 1,
+                $type.': #22 lowercase `not in` keeps NOT and expands'
+            );
+        } else {
+            for ($i = 0; $i < 3; $i++)
+                $test->expect(true, $type.': #22 SQL parser skip (non-SQL)');
+        }
+
         return $test->results();
     }
 }

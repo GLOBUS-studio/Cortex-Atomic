@@ -101,7 +101,8 @@ class CortexQueryParser extends \Prefab {
 					} elseif ($argCount === 1) {
 						$val = array_shift($args);
 						// enhanced IN operator args expansion
-						if (($pos = strpos($part, ' IN ?')) !== false) {
+						if (preg_match('/\sIN\s+\?/i', $part, $inMatch, PREG_OFFSET_CAPTURE)) {
+							$pos = $inMatch[0][1];
 							if ($val instanceof CortexCollection)
 								$val = $val->getAll('_id',TRUE);
 							if (!is_array($val) || empty($val))
