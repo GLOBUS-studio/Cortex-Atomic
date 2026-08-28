@@ -376,7 +376,122 @@ class Test_Schema {
 		}
 
 		// ========================================================================
-		// 13. Column defaults are SQL-quoted, not HTML-encoded
+		// 13. renameColumn() keeps AUTO_INCREMENT on the PK
+		// MySQL CHANGE used to omit AUTO_INCREMENT; omit-key inserts then fail.
+		// PostgreSQL RENAME COLUMN already preserves serial/identity.
+		// SQLite rename goes through _sqlite_rebuild() — skipped.
+		// ========================================================================
+		if (!str_contains($db->driver(), 'sqlite')) {
+			$tAi = 'test_schema_ai';
+			if (in_array($tAi, $schema->getTables()))
+				$schema->dropTable($tAi);
+			$tcAi = $schema->createTable($tAi);
+			$tcAi->addColumn('label')->type(\DB\Cortex\Schema\Schema::DT_VARCHAR256);
+			$tcAi->build();
+			$db->exec("INSERT INTO ".$db->quotekey($tAi)
+				." (".$db->quotekey('label').") VALUES (?)", ['first']);
+			$tmAi = $schema->alterTable($tAi);
+			$tmAi->renameColumn('id','uid');
+			$tmAi->build();
+
+			$metaAi = $this->columnMeta($db, $tAi, 'uid');
+			if (str_contains($db->driver(), 'mysql'))
+				$test->expect(
+					$metaAi !== null
+						&& stripos((string)($metaAi['extra'] ?? ''), 'auto_increment') !== false,
+					$type.': renameColumn() preserves AUTO_INCREMENT'
+				);
+
+			$omitOk = false;
+			$omitErr = '';
+			try {
+				$db->exec("INSERT INTO ".$db->quotekey($tAi)
+					." (".$db->quotekey('label').") VALUES (?)", ['second']);
+				$omitOk = true;
+			} catch (\Exception $e) {
+				$omitErr = $e->getMessage();
+			}
+			$test->expect(
+				$omitOk,
+				$type.': renameColumn() omit-key insert still auto-fills PK'
+					.($omitErr ? ' ('.$omitErr.')' : '')
+			);
+			$rowAi = $omitOk ? $db->exec("SELECT ".$db->quotekey('uid')
+				." FROM ".$db->quotekey($tAi)
+				." WHERE ".$db->quotekey('label')." = ?", ['second']) : [];
+			$test->expect(
+				isset($rowAi[0]['uid']) && (int)$rowAi[0]['uid'] > 0,
+				$type.': renamed auto-inc PK received a generated value'
+			);
+			$schema->dropTable($tAi);
+		}
+
+		// ========================================================================
+		// 14. renameColumn() keeps DEFAULT ''
+		// getCols() used to treat empty string as "no default".
+		// ========================================================================
+		if (!str_contains($db->driver(), 'sqlite')) {
+			$tEmpty = 'test_schema_emptydef';
+			if (in_array($tEmpty, $schema->getTables()))
+				$schema->dropTable($tEmpty);
+			$tcEmpty = $schema->createTable($tEmpty);
+			$tcEmpty->addColumn('label')->type(\DB\Cortex\Schema\Schema::DT_VARCHAR256);
+			$tcEmpty->addColumn('blank')->type(\DB\Cortex\Schema\Schema::DT_VARCHAR256)
+				->defaults('');
+			$tcEmpty->build();
+			$tmEmpty = $schema->alterTable($tEmpty);
+			$tmEmpty->renameColumn('blank','emptycol');
+			$tmEmpty->build();
+			$db->exec("INSERT INTO ".$db->quotekey($tEmpty)
+				." (".$db->quotekey('label').") VALUES (?)", ['omit']);
+			$rowEmpty = $db->exec("SELECT ".$db->quotekey('emptycol')
+				." FROM ".$db->quotekey($tEmpty)
+				." WHERE ".$db->quotekey('label')." = ?", ['omit']);
+			$test->expect(
+				isset($rowEmpty[0]['emptycol']) && $rowEmpty[0]['emptycol'] === '',
+				$type.': renameColumn() preserves DEFAULT empty string'
+			);
+			$schema->dropTable($tEmpty);
+		}
+
+		// ========================================================================
+		// 15. updateColumn() keeps UNSIGNED / ZEROFILL on MySQL
+		// Bare INT8 replaces the live type string; modifiers must be copied.
+		// Rename already keeps them (they live in Type). Postgres has neither.
+		// ========================================================================
+		if (str_contains($db->driver(), 'mysql')) {
+			$tUn = 'test_schema_unsigned';
+			if (in_array($tUn, $schema->getTables()))
+				$schema->dropTable($tUn);
+			$tcUn = $schema->createTable($tUn);
+			$tcUn->addColumn('num')->type('INT UNSIGNED', true)
+				->nullable(false)->defaults(7);
+			$tcUn->addColumn('zf')->type('INT(4) UNSIGNED ZEROFILL', true);
+			$tcUn->build();
+			$tmUn = $schema->alterTable($tUn);
+			$tmUn->updateColumn('num', \DB\Cortex\Schema\Schema::DT_INT8);
+			$tmUn->updateColumn('zf', \DB\Cortex\Schema\Schema::DT_INT8);
+			$tmUn->build();
+			$metaUn = $this->columnMeta($db, $tUn, 'num');
+			$test->expect(
+				$metaUn !== null
+					&& stripos((string)$metaUn['type'], 'bigint') !== false
+					&& stripos((string)$metaUn['type'], 'unsigned') !== false,
+				$type.': updateColumn() preserves UNSIGNED on INT8'
+			);
+			$metaZf = $this->columnMeta($db, $tUn, 'zf');
+			$test->expect(
+				$metaZf !== null
+					&& stripos((string)$metaZf['type'], 'bigint') !== false
+					&& stripos((string)$metaZf['type'], 'unsigned') !== false
+					&& stripos((string)$metaZf['type'], 'zerofill') !== false,
+				$type.': updateColumn() preserves UNSIGNED ZEROFILL on INT8'
+			);
+			$schema->dropTable($tUn);
+		}
+
+		// ========================================================================
+		// 16. Column defaults are SQL-quoted, not HTML-encoded
 		// htmlspecialchars() before quote() stored Tom &amp; Jerry instead of
 		// Tom & Jerry. quote() already makes the DDL literal safe.
 		// CREATE TABLE (not ALTER rebuild), so SQLite is included.
@@ -419,7 +534,7 @@ class Test_Schema {
 		$schema->dropTable($tDefault);
 
 		// ========================================================================
-		// 14. Add TIMESTAMP + CURRENT_TIMESTAMP to an existing table
+		// 17. Add TIMESTAMP + CURRENT_TIMESTAMP to an existing table
 		// SQLite cannot ALTER-add a dynamic default; it rebuilds the table.
 		// The rebuild used to TypeError: unguarded rebuild_cmd['update'] and
 		// dropTable() reading a protected TableBuilder::$name.
@@ -485,7 +600,8 @@ class Test_Schema {
 		// CLEANUP
 		// ========================================================================
 		foreach (['stest_rpivot', 'stest_child', 'stest_pivot', 'stest_b', 'stest_a',
-			'test_schema_defraw', 'test_schema_stamp'] as $t)
+			'test_schema_defraw', 'test_schema_stamp', 'test_schema_ai',
+			'test_schema_emptydef', 'test_schema_unsigned'] as $t)
 			if (in_array($t, $schema->getTables()))
 				$schema->dropTable($t);
 
@@ -494,7 +610,7 @@ class Test_Schema {
 
 	/**
 	 * Nullability + default from the engine catalog, not Cortex getCols().
-	 * @return array{nullable:bool,default:?string,type:string}|null
+	 * @return array{nullable:bool,default:?string,type:string,extra?:string}|null
 	 */
 	private function columnMeta($db, string $table, string $column): ?array {
 		$driver = $db->driver();
@@ -506,6 +622,7 @@ class Test_Schema {
 				'nullable' => $cols[0]['Null'] === 'YES',
 				'default' => $cols[0]['Default'] === null ? null : (string)$cols[0]['Default'],
 				'type' => (string)$cols[0]['Type'],
+				'extra' => (string)$cols[0]['Extra'],
 			];
 		}
 		if (str_contains($driver, 'pgsql')) {

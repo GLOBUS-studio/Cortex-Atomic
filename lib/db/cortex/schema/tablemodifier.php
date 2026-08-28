@@ -249,14 +249,16 @@ class TableModifier extends TableBuilder {
 			return array_keys($schema);
 		else
 			foreach ($schema as $name=>&$cols) {
-				$default=($cols['default']==='')?NULL:$cols['default'];
-				if (!is_null($default) && ((is_int(strpos($curdef=strtolower(
+				$default=$cols['default'];
+				// Keep DEFAULT '' — empty string is not "no default".
+				// strpos($x,'') is 0, so CUR_STAMP matching must skip ''.
+				if ($default!=='' && !is_null($default) && ((is_int(strpos($curdef=strtolower(
 								$this->findQuery($this->schema->getDefaultTypes()['CUR_STAMP'])),
 								strtolower($default))) ||
 							is_int(strpos(strtolower($default),$curdef)))
 						|| $default=="('now'::text)::timestamp(0) without time zone")) {
 					$default='CUR_STAMP';
-				} elseif (!is_null($default)) {
+				} elseif ($default!=='' && !is_null($default)) {
 					// remove single-qoutes
 					if (strpos($this->db->driver(),'sqlite')!==FALSE)
 						$default=preg_replace('/^\s*([\'"])(.*)\1\s*$/','\2',$default);
@@ -269,7 +271,7 @@ class TableModifier extends TableBuilder {
 							$default=NULL; // drop autoincrement default
 						elseif (preg_match("/^\'*(.*)\'*::(\s*\w)+/",$default,$match))
 							$default=$match[1];
-				} else
+				} elseif ($default!=='')
 					$default=FALSE;
 				$cols['default']=$default;
 			}
@@ -340,7 +342,13 @@ class TableModifier extends TableBuilder {
 			$quotedColumn=$this->db->quotekey($name);
 			$quotedColumnNew=$this->db->quotekey($new_name);
 			// MySQL CHANGE replaces the whole column definition.
-			// Re-emit type + nullability + default so they are not dropped.
+			// Re-emit type + nullability + default + AUTO_INCREMENT so they
+			// are not dropped. Column still cannot represent comments,
+			// collation, generated columns, or ON UPDATE CURRENT_TIMESTAMP.
+			// TODO: on MySQL 8.0.4+ / MariaDB 10.5.2+ use
+			//   ALTER TABLE t RENAME COLUMN old TO new
+			// which keeps the full definition without reconstruction.
+			// Keep CHANGE as fallback for MySQL 5.7 / MariaDB 10.4.
 			$col=new Column($new_name,$this);
 			$col->copyfrom($existing_columns[$name]);
 			$col->passThrough();
@@ -381,12 +389,15 @@ class TableModifier extends TableBuilder {
 				$dat=$col->getColumnQuery();
 			elseif (strpos($this->db->driver(),'mysql')!==FALSE) {
 				// MODIFY COLUMN replaces the whole definition.
-				// Re-emit nullability + default from the live column so a
-				// bare type string does not drop them.
+				// Re-emit nullability + default + AUTO_INCREMENT from the live
+				// column so a bare type string does not drop them. Copy
+				// UNSIGNED / ZEROFILL onto the new numeric type.
 				$existing=$this->getCols(TRUE);
 				if (isset($existing[$name])) {
 					$preserved=new Column($name,$this);
 					$preserved->copyfrom($existing[$name]);
+					$datatype=$this->_mysqlCopyNumericModifiers(
+						$existing[$name]['type']??'',$datatype);
 					$preserved->type($datatype,TRUE);
 					$dat=$preserved->getColumnQuery();
 				} else
@@ -523,6 +534,22 @@ class TableModifier extends TableBuilder {
 		$query=$this->schema->renameTable($this->name,$new_name,$exec);
 		$this->name=$new_name;
 		return ($exec)?$this:$query;
+	}
+
+	/**
+	 * copy UNSIGNED / ZEROFILL from a live MySQL type onto a replacement type
+	 * @param string $oldType
+	 * @param string $newType
+	 * @return string
+	 */
+	protected function _mysqlCopyNumericModifiers($oldType,$newType) {
+		if (!preg_match('/int|float|double|decimal|numeric|real|dec\b/i',$newType))
+			return $newType;
+		foreach (['unsigned','zerofill'] as $mod)
+			if (preg_match('/\b'.$mod.'\b/i',$oldType)
+				&& !preg_match('/\b'.$mod.'\b/i',$newType))
+				$newType.=' '.strtoupper($mod);
+		return $newType;
 	}
 
 	/**

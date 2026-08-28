@@ -22,7 +22,7 @@ class Column {
 
 	use DB_Utils;
 
-	protected $name,$type,$nullable,$default,$after,$index,$unique,$passThrough,$pkey;
+	protected $name,$type,$nullable,$default,$after,$index,$unique,$passThrough,$pkey,$auto_inc;
 	protected $table,$schema,$type_val;
 
 	public function __get($prop) {
@@ -48,6 +48,7 @@ class Column {
 		$this->unique=FALSE;
 		$this->passThrough=FALSE;
 		$this->pkey=FALSE;
+		$this->auto_inc=FALSE;
 
 		$this->table=$table;
 		$this->schema=$table->getSchema();
@@ -183,7 +184,7 @@ class Column {
 	 */
 	public function getColumnArray() {
 		$fields=['name','type','passThrough','default','nullable',
-			'index','unique','after','pkey'];
+			'index','unique','after','pkey','auto_inc'];
 		$fields=array_flip($fields);
 		foreach ($fields as $key=>&$val)
 			$val=$this->{$key};
@@ -242,6 +243,10 @@ class Column {
 			$def_cmd=$this->findQuery($def_cmds).' '.$this->getDefault();
 			$query.=' '.$def_cmd;
 		}
+		// Catalog auto_inc survives copyfrom(); emit it on MySQL CHANGE/MODIFY
+		// so rename/type-change does not drop AUTO_INCREMENT.
+		if ($this->auto_inc && strpos($this->db->driver(),'mysql')!==FALSE)
+			$query.=' AUTO_INCREMENT';
 		if (!empty($this->after) && $this->table instanceof TableModifier) {
 			// `after` feature only works for mysql
 			if (strpos($this->db->driver(),'mysql')!==FALSE) {
