@@ -112,9 +112,12 @@ class CortexQueryParser extends \Prefab {
 						}
 						// comparison against NULL
 						elseif($val === null &&
-							preg_match('/(.+?)\s*(!?={1,2})\s*(?:\?|:\w+)/i',
-								$part,$match)) {
-							$part = ' '.$match[1].' IS '.($match[2][0]=='!'?'NOT ':'').'NULL ';
+							preg_match('/(.+?)\s*(<>|!==|!=|==|=)\s*(?:\?|:\w+)\s*$/i',
+								$part,$match)
+							// exclude >= and <=, they only matched their trailing =
+							&& !preg_match('/[<>]$/',rtrim($match[1]))) {
+							$part = ' '.$match[1].' IS '.
+								(in_array($match[2],['<>','!=','!==']) ? 'NOT ' : '').'NULL ';
 						} else
 							$ncond[] = $val;
 					}
@@ -264,9 +267,9 @@ class CortexQueryParser extends \Prefab {
 					$skipVal=true;
 				}
 				elseif($val===null && preg_match('/(\w+)\s*([!=<>]+)\s*\?/i',$part,$nmatch)
-					&& ($nmatch[2]=='=' || $nmatch[2]=='==' || $nmatch[2]=='!=' || $nmatch[2]=='!==')){
+					&& in_array($nmatch[2],['=','==','!=','!==','<>'])){
 					$kval=ltrim($nmatch[1],'@');
-					if ($nmatch[2][0] == '!')
+					if ($nmatch[2][0] == '!' || $nmatch[2] == '<>')
 						$part = '(array_key_exists(\''.$kval.'\',$_row) && $_row[\''.$kval.'\']!==NULL)';
 					else
 						$part = '(!array_key_exists(\''.$kval.'\',$_row) || '.

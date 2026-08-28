@@ -652,7 +652,72 @@ class Test_EdgeCases {
 			is_array($f8) && count($f8) == 1,
 			$type.': prepareFilter compound [a=null AND b=null] - 0 bind params'
 		);
+
+		// ====================================================================
+		// 32. <> against NULL is a synonym of != and must rewrite
+		// ====================================================================
+		$f9 = $qp->prepareFilter(['name <> ?', null], 'sql', $db);
+		$test->expect(
+			is_array($f9) && count($f9) == 1
+				&& str_contains($f9[0], 'IS NOT NULL'),
+			$type.': prepareFilter [name <> ?, null] produces IS NOT NULL, no bind param'
+		);
+
+		$f10 = $qp->prepareFilter(['name <> :n', ':n' => null], 'sql', $db);
+		$test->expect(
+			is_array($f10) && count($f10) == 1
+				&& str_contains($f10[0], 'IS NOT NULL'),
+			$type.': prepareFilter [name <> :n, null] produces IS NOT NULL'
+		);
+
+		// ====================================================================
+		// 33. >= and <= must not match on their trailing =
+		// ====================================================================
+		$f11 = $qp->prepareFilter(['created_at >= ?', null], 'sql', $db);
+		$test->expect(
+			is_array($f11) && count($f11) == 2
+				&& !str_contains($f11[0], 'IS NULL')
+				&& $f11[1] === null,
+			$type.': prepareFilter [created_at >= ?, null] keeps operator and bind param'
+		);
+
+		$f12 = $qp->prepareFilter(['created_at <= ?', null], 'sql', $db);
+		$test->expect(
+			is_array($f12) && count($f12) == 2
+				&& !str_contains($f12[0], 'IS NULL')
+				&& $f12[1] === null,
+			$type.': prepareFilter [created_at <= ?, null] keeps operator and bind param'
+		);
+
+		// bind order must stay aligned after a >= null
+		$f13 = $qp->prepareFilter(['created_at >= ? AND name = ?', null, 'Alice'], 'sql', $db);
+		$test->expect(
+			is_array($f13) && count($f13) == 3
+				&& $f13[1] === null && $f13[2] == 'Alice',
+			$type.': prepareFilter [created_at >= null AND name = Alice] keeps bind order'
+		);
+
 		} // end SQL-only parser tests
+
+		// ====================================================================
+		// 34. <> against NULL behaves exactly like != on every engine
+		// ====================================================================
+		$newsNe = new \NewsModel();
+		$neCount = count($newsNe->find(['text != ?', null]) ?: []);
+		$newsLtGt = new \NewsModel();
+		$ltgtCount = count($newsLtGt->find(['text <> ?', null]) ?: []);
+		$test->expect(
+			$neCount == 6 && $neCount === $ltgtCount,
+			$type.': find [text <> null] matches find [text != null] ('.
+				$ltgtCount.' vs '.$neCount.' rows, expect 6)'
+		);
+
+		$newsEq = new \NewsModel();
+		$eqCount = count($newsEq->find(['text = ?', null]) ?: []);
+		$test->expect(
+			$eqCount == 2 && ($eqCount + $ltgtCount) == 8,
+			$type.': find [text = null] and [text <> null] partition all 8 rows'
+		);
 
 		// ====================================================================
 		// CLEANUP
