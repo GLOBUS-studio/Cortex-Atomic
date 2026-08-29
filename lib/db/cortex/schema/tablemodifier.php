@@ -341,28 +341,25 @@ class TableModifier extends TableBuilder {
 			$quotedTable=$this->db->quotekey($this->name);
 			$quotedColumn=$this->db->quotekey($name);
 			$quotedColumnNew=$this->db->quotekey($new_name);
-			// MySQL CHANGE replaces the whole column definition.
-			// Re-emit type + nullability + default + AUTO_INCREMENT so they
-			// are not dropped. Column still cannot represent comments,
-			// collation, generated columns, or ON UPDATE CURRENT_TIMESTAMP.
-			// TODO: on MySQL 8.0.4+ / MariaDB 10.5.2+ use
-			//   ALTER TABLE t RENAME COLUMN old TO new
-			// which keeps the full definition without reconstruction.
-			// Keep CHANGE as fallback for MySQL 5.7 / MariaDB 10.4.
-			$col=new Column($new_name,$this);
-			$col->copyfrom($existing_columns[$name]);
-			$col->passThrough();
-			$cmd=[
-				'mysql'=>
-					"ALTER TABLE $quotedTable CHANGE $quotedColumn ".$col->getColumnQuery().";",
-				'pgsql|ibm'=>
-					"ALTER TABLE $quotedTable RENAME COLUMN $quotedColumn TO $quotedColumnNew;",
-				'mssql|sybase|dblib|sqlsrv'=>
-					"sp_rename [$this->name.$name], '$new_name', 'Column'",
-			];
-			if (preg_match('/mssql|sybase|dblib|sqlsrv/',$this->db->driver()))
+			// Only MySQL needs the full column definition reconstructed.
+			$driver=$this->db->driver();
+			if (strpos($driver,'mysql')!==FALSE) {
+				// CHANGE replaces the whole definition, so preserve known metadata.
+				// TODO: on MySQL 8.0.4+ / MariaDB 10.5.2+ use
+				// RENAME COLUMN to preserve metadata that Column cannot represent.
+				$col=new Column($new_name,$this);
+				$col->copyfrom($existing_columns[$name]);
+				$col->passThrough();
+				$this->queries[]="ALTER TABLE $quotedTable CHANGE $quotedColumn ".
+					$col->getColumnQuery().";";
+			} elseif (preg_match('/mssql|sybase|dblib|sqlsrv/',$driver)) {
 				$this->suppress=TRUE;
-			$this->queries[]=$this->findQuery($cmd);
+				$this->queries[]="sp_rename [$this->name.$name], '$new_name', 'Column'";
+			} elseif (preg_match('/pgsql|ibm/',$driver))
+				$this->queries[]=
+					"ALTER TABLE $quotedTable RENAME COLUMN $quotedColumn TO $quotedColumnNew;";
+			else
+				trigger_error(sprintf(self::TEXT_ENGINE_NOT_SUPPORTED,$driver),E_USER_ERROR);
 		}
 	}
 

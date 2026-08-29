@@ -5,6 +5,30 @@
  * Verifies that the new schema classes work directly,
  * and that the DB\SQL\Schema backward-compatible alias works.
  */
+/** In-memory probe with a configurable driver name. */
+class SchemaRenameProbeDB extends \DB\SQL {
+	function __construct($driver) {
+		parent::__construct('sqlite::memory:');
+		$this->engine = $driver;
+	}
+}
+
+/** Column catalog that fails if native renames reconstruct its definition. */
+class SchemaRenameProbeModifier extends \DB\Cortex\Schema\TableModifier {
+	public static $probeType = 'date';
+	public static $probeDefault = 'CUR_STAMP';
+	function getCols($types = FALSE) {
+		// Omit 'name' so copyfrom() keeps the replacement name.
+		$cols = ['event_date' => [
+			'type' => self::$probeType, 'pdo_type' => \PDO::PARAM_STR,
+			'default' => self::$probeDefault,
+			'nullable' => TRUE, 'pkey' => FALSE,
+		]];
+		return $types ? $cols : array_keys($cols);
+	}
+	function getQueries() { return $this->queries; }
+}
+
 class Test_Schema {
 
 	function run($db, $type)
@@ -595,6 +619,56 @@ class Test_Schema {
 		}
 		if (in_array($tStamp, $schema->getTables()))
 			$schema->dropTable($tStamp);
+
+		// ========================================================================
+		// 19. renameColumn must not build a MySQL column definition on drivers
+		//     that rename natively. Uses fake drivers, so it needs no server.
+		// ========================================================================
+		$renameProbe = function($driver) {
+			$probeDb = new \SchemaRenameProbeDB($driver);
+			$probeTm = new \SchemaRenameProbeModifier('probe_table',
+				new \DB\Cortex\Schema\Schema($probeDb));
+			// trigger_error(E_USER_ERROR) is not a Throwable, so promote it
+			// before F3's handler turns it into a fatal page.
+			set_error_handler(function($no, $str) { throw new \ErrorException($str); });
+			try {
+				$probeTm->renameColumn('event_date', 'renamed_date');
+				return implode(' ', $probeTm->getQueries());
+			} catch (\Throwable $e) {
+				return 'ERROR: '.$e->getMessage();
+			} finally {
+				restore_error_handler();
+			}
+		};
+
+		$renamePgsql = $renameProbe('pgsql');
+		$test->expect(
+			$renamePgsql === 'ALTER TABLE "probe_table" RENAME COLUMN'
+				.' "event_date" TO "renamed_date";',
+			$type.': PostgreSQL rename skips MySQL column reconstruction'
+				.' ('.$renamePgsql.')'
+		);
+
+		$renameSqlsrv = $renameProbe('sqlsrv');
+		$test->expect(
+			$renameSqlsrv === "sp_rename [probe_table.event_date],"
+				." 'renamed_date', 'Column'",
+			$type.': SQL Server rename skips MySQL column reconstruction'
+				.' ('.$renameSqlsrv.')'
+		);
+
+		// MySQL must still rebuild the definition with valid metadata.
+		\SchemaRenameProbeModifier::$probeType = 'varchar(128)';
+		\SchemaRenameProbeModifier::$probeDefault = FALSE;
+		$renameMysql = $renameProbe('mysql');
+		\SchemaRenameProbeModifier::$probeType = 'date';
+		\SchemaRenameProbeModifier::$probeDefault = 'CUR_STAMP';
+		$test->expect(
+			$renameMysql === 'ALTER TABLE `probe_table` CHANGE `event_date`'
+				.' `renamed_date` varchar(128) NULL;',
+			$type.': MySQL rename still rebuilds the column definition'
+				.' ('.$renameMysql.')'
+		);
 
 		// ========================================================================
 		// CLEANUP
