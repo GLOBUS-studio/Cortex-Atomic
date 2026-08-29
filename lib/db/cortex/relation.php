@@ -263,10 +263,21 @@ trait RelationTrait {
 				.($relWhere?' AND ('.$relWhere.')':'').')';
 		} elseif ($driver=='mysql') {
 			// MySQL 5.7+ / MariaDB 10.2+ JSON_CONTAINS()
-			// cast to CHAR, not JSON: MariaDB has no JSON cast target,
-			// and a numeric PK rendered as CHAR is still valid JSON on both
+			// MariaDB has no JSON cast target. A numeric PK rendered as CHAR is
+			// valid JSON; text PKs must be JSON-quoted to match ["value"].
+			$relFields = $rel->getFieldConfiguration();
+			$relPKType = $relFields[$relPK]['type'] ?? 'INT4';
+			$isNumericPK = (bool)preg_match(
+				'/^\s*(?:BOOL|BOOLEAN|TINYINT|SMALLINT|MEDIUMINT|MIDDLEINT|'.
+				'INT(?:1|2|3|4|8)?|INTEGER|BIGINT|FLOAT(?:4|8)?|'.
+				'DOUBLE(?:\s+PRECISION)?|DECIMAL|NUMERIC|REAL|DEC|FIXED|NUMBER|SERIAL)\b/i',
+				(string)$relPKType
+			);
+			$jsonCandidate = 'CAST('.$alias_r.'.'.$qRelPK.' AS CHAR)';
+			if (!$isNumericPK)
+				$jsonCandidate = 'JSON_QUOTE('.$jsonCandidate.')';
 			$exists = 'EXISTS(SELECT 1 FROM '.$qRelTable.' '.$alias_r
-				.' WHERE JSON_CONTAINS('.$qKey.',CAST('.$alias_r.'.'.$qRelPK.' AS CHAR))'
+				.' WHERE JSON_CONTAINS('.$qKey.','.$jsonCandidate.')'
 				.($relWhere?' AND ('.$relWhere.')':'').')';
 		} elseif ($driver=='pgsql') {
 			// PostgreSQL json_array_elements_text()

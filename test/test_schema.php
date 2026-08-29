@@ -621,8 +621,90 @@ class Test_Schema {
 			$schema->dropTable($tStamp);
 
 		// ========================================================================
-		// 19. renameColumn must not build a MySQL column definition on drivers
-		//     that rename natively. Uses fake drivers, so it needs no server.
+		// 18. MySQL metadata preservation must not affect unrelated types/drivers
+		// ========================================================================
+		$tmRef = new \ReflectionClass(\DB\Cortex\Schema\TableModifier::class);
+		$tmProbe = $tmRef->newInstanceWithoutConstructor();
+		$copyModifiers = $tmRef->getMethod('_mysqlCopyNumericModifiers');
+		$test->expect(
+			$copyModifiers->invoke($tmProbe, 'INT UNSIGNED', 'POINT') === 'POINT',
+			$type.': MySQL modifier preservation does not classify POINT as INT'
+		);
+		$test->expect(
+			$copyModifiers->invoke($tmProbe, 'INT UNSIGNED', 'BIGINT SIGNED')
+				=== 'BIGINT SIGNED',
+			$type.': explicit SIGNED type is not made UNSIGNED'
+		);
+		$test->expect(
+			$copyModifiers->invoke($tmProbe, 'INT UNSIGNED', 'INT8')
+				=== 'INT8 UNSIGNED',
+			$type.': Cortex INT8 alias preserves UNSIGNED'
+		);
+		$test->expect(
+			$copyModifiers->invoke($tmProbe, 'TINYINT UNSIGNED', 'BOOL')
+				=== 'BOOL UNSIGNED',
+			$type.': BOOL alias preserves UNSIGNED'
+		);
+		$test->expect(
+			$copyModifiers->invoke($tmProbe, 'TINYINT UNSIGNED', 'BOOLEAN')
+				=== 'BOOLEAN UNSIGNED',
+			$type.': BOOLEAN alias preserves UNSIGNED'
+		);
+		$test->expect(
+			$copyModifiers->invoke($tmProbe, 'DECIMAL UNSIGNED', 'FIXED')
+				=== 'FIXED UNSIGNED',
+			$type.': FIXED alias preserves UNSIGNED'
+		);
+		$test->expect(
+			$copyModifiers->invoke($tmProbe, 'FLOAT ZEROFILL', 'FLOAT4')
+				=== 'FLOAT4 ZEROFILL',
+			$type.': FLOAT4 alias preserves ZEROFILL'
+		);
+		$test->expect(
+			$copyModifiers->invoke($tmProbe, 'DOUBLE UNSIGNED', 'FLOAT8')
+				=== 'FLOAT8 UNSIGNED',
+			$type.': FLOAT8 alias preserves UNSIGNED'
+		);
+		$test->expect(
+			$copyModifiers->invoke($tmProbe, 'MEDIUMINT UNSIGNED', 'MIDDLEINT')
+				=== 'MIDDLEINT UNSIGNED',
+			$type.': MIDDLEINT alias preserves UNSIGNED'
+		);
+		$test->expect(
+			$copyModifiers->invoke($tmProbe, 'BIGINT ZEROFILL', 'SERIAL')
+				=== 'SERIAL',
+			$type.': SERIAL alias is not given incompatible modifiers'
+		);
+		foreach ([
+			['INT UNSIGNED', 'INT', 'INT UNSIGNED'],
+			['INT UNSIGNED', 'TINYINT', 'TINYINT UNSIGNED'],
+			['INT UNSIGNED', 'SMALLINT', 'SMALLINT UNSIGNED'],
+			['INT UNSIGNED', 'MEDIUMINT', 'MEDIUMINT UNSIGNED'],
+			['INT UNSIGNED', 'BIGINT', 'BIGINT UNSIGNED'],
+			['INT UNSIGNED', 'INT1', 'INT1 UNSIGNED'],
+			['INT UNSIGNED', 'INT2', 'INT2 UNSIGNED'],
+			['INT UNSIGNED', 'INT3', 'INT3 UNSIGNED'],
+			['INT UNSIGNED', 'INT4', 'INT4 UNSIGNED'],
+			['INT UNSIGNED', 'INTEGER', 'INTEGER UNSIGNED'],
+			['FLOAT UNSIGNED', 'FLOAT', 'FLOAT UNSIGNED'],
+			['DOUBLE UNSIGNED', 'DOUBLE', 'DOUBLE UNSIGNED'],
+			['DECIMAL UNSIGNED', 'DECIMAL', 'DECIMAL UNSIGNED'],
+			['DECIMAL UNSIGNED', 'DEC', 'DEC UNSIGNED'],
+			['DECIMAL UNSIGNED', 'NUMERIC', 'NUMERIC UNSIGNED'],
+			['DOUBLE UNSIGNED', 'REAL', 'REAL UNSIGNED'],
+			['DOUBLE UNSIGNED', 'DOUBLE PRECISION', 'DOUBLE PRECISION UNSIGNED'],
+			['DECIMAL ZEROFILL', 'NUMBER', 'NUMBER ZEROFILL'],
+			['INT UNSIGNED', 'BIT', 'BIT'],
+		] as $aliasCase) {
+			$test->expect(
+				$copyModifiers->invoke($tmProbe, $aliasCase[0], $aliasCase[1])
+					=== $aliasCase[2],
+				$type.': numeric type '.$aliasCase[1].' preserves modifiers'
+			);
+		}
+
+		// ========================================================================
+		// 19. Native renames must not reconstruct a MySQL column definition.
 		// ========================================================================
 		$renameProbe = function($driver) {
 			$probeDb = new \SchemaRenameProbeDB($driver);

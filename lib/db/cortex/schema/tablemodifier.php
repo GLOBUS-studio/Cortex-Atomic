@@ -540,7 +540,18 @@ class TableModifier extends TableBuilder {
 	 * @return string
 	 */
 	protected function _mysqlCopyNumericModifiers($oldType,$newType) {
-		if (!preg_match('/int|float|double|decimal|numeric|real|dec\b/i',$newType))
+		// SERIAL is a complete BIGINT UNSIGNED AUTO_INCREMENT UNIQUE alias,
+		// not a base type to which the live column's modifiers can be appended.
+		if (preg_match('/^\s*serial\b/i',$newType))
+			return $newType;
+		if (!preg_match('/^\s*(?:tinyint|smallint|mediumint|int(?:1|2|3|4|8)?|integer|bigint|'.
+			'float|float4|float8|double(?:\s+precision)?|decimal|numeric|real|dec|fixed|number|'.
+			'bool|boolean|middleint)\b/i',$newType))
+			return $newType;
+		// SIGNED explicitly requests removal of UNSIGNED. ZEROFILL implies
+		// UNSIGNED, so do not preserve either modifier in that case.
+		if (preg_match('/\bsigned\b/i',$newType)
+			&& !preg_match('/\bunsigned\b/i',$newType))
 			return $newType;
 		foreach (['unsigned','zerofill'] as $mod)
 			if (preg_match('/\b'.$mod.'\b/i',$oldType)
