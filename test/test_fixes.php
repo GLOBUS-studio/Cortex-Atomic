@@ -393,8 +393,18 @@ class Test_Fixes {
                 is_array($f22c) && preg_match('/not\s+in\s*\(\?,\?\)/i', $f22c[0]) === 1,
                 $type.': #22 lowercase `not in` keeps NOT and expands'
             );
+
+            $normalizeLike = (new \ReflectionClass($qp22))
+                ->getMethod('normalizeParenthesizedBind');
+            $quotedLikeInput = "title = 'literal LIKE(?) text'";
+            $f22Quoted = $normalizeLike->invoke(
+                $qp22, $quotedLikeInput, 'LIKE', false);
+            $test->expect(
+                $f22Quoted === $quotedLikeInput,
+                $type.': #22 LIKE(?) text inside a quoted literal is unchanged'
+            );
         } else {
-            for ($i = 0; $i < 3; $i++)
+            for ($i = 0; $i < 4; $i++)
                 $test->expect(true, $type.': #22 SQL parser skip (non-SQL)');
         }
 
@@ -433,8 +443,67 @@ class Test_Fixes {
                 is_array($f22h) && isset($f22h['name']['$in']),
                 $type.': #22 Mongo: lowercase `in` maps to $in'
             );
+
+            // Exact keyword field names are identifiers when followed by a
+            // symbolic comparison operator.
+            $f22i = $qp22->prepareFilter(['in = ?', 'x'], 'mongo', $db);
+            $test->expect(
+                is_array($f22i) && array_key_exists('in', $f22i) && $f22i['in'] === 'x',
+                $type.': #22 Mongo: field named `in` is not parsed as operator'
+            );
+
+            $f22j = $qp22->prepareFilter(['like = ?', 'x'], 'mongo', $db);
+            $test->expect(
+                is_array($f22j) && array_key_exists('like', $f22j) && $f22j['like'] === 'x',
+                $type.': #22 Mongo: field named `like` is not parsed as operator'
+            );
+
+            // A keyword-named field must still support that keyword as the
+            // actual operator; splitting must use the matched operator offset.
+            $f22m = $qp22->prepareFilter(['in IN ?', [1,2]], 'mongo', $db);
+            $test->expect(
+                is_array($f22m) && isset($f22m['in']['$in'])
+                    && $f22m['in']['$in'] === [1,2],
+                $type.': #22 Mongo: field named `in` supports the IN operator'
+            );
+
+            $f22n = $qp22->prepareFilter(['like LIKE ?', 'Al%'], 'mongo', $db);
+            $test->expect(
+                is_array($f22n) && isset($f22n['like'])
+                    && $f22n['like'] instanceof \MongoDB\BSON\Regex,
+                $type.': #22 Mongo: field named `like` supports the LIKE operator'
+            );
+
+            foreach ([[], 'scalar'] as $invalidIn22) {
+                $inError22 = null;
+                try {
+                    $qp22->prepareFilter(['name IN ?', $invalidIn22], 'mongo', $db);
+                } catch (\Throwable $e) {
+                    $inError22 = $e;
+                }
+                $test->expect(
+                    $inError22 instanceof \Exception
+                        && $inError22->getMessage() ===
+                            \DB\CortexQueryParser::E_INBINDVALUE,
+                    $type.': #22 Mongo: invalid IN bind is rejected explicitly'
+                );
+            }
+
+            $f22k = $qp22->prepareFilter(['name LIKE(?)', 'Al%'], 'mongo', $db);
+            $test->expect(
+                is_array($f22k) && isset($f22k['name'])
+                    && $f22k['name'] instanceof \MongoDB\BSON\Regex,
+                $type.': #22 Mongo: LIKE(?) remains accepted'
+            );
+
+            $f22l = $qp22->prepareFilter(['name NOT LIKE(?)', 'Al%'], 'mongo', $db);
+            $test->expect(
+                is_array($f22l) && isset($f22l['name']['$not'])
+                    && $f22l['name']['$not'] instanceof \MongoDB\BSON\Regex,
+                $type.': #22 Mongo: NOT LIKE(?) remains accepted'
+            );
         } else {
-            for ($i = 0; $i < 5; $i++)
+            for ($i = 0; $i < 13; $i++)
                 $test->expect(true, $type.': #22 Mongo parser skip (non-Mongo)');
         }
 

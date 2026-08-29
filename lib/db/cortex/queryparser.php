@@ -63,7 +63,9 @@ class CortexQueryParser extends \Prefab {
 		}
 		$where = str_replace($unify[0], $unify[1], $where);
 		// prepare IN condition
-		$where = preg_replace('/\bIN\b\s*\(\s*(\?|:\w+)?\s*\)/i', 'IN $1', $where);
+		$where = $this->normalizeParenthesizedBind($where,'IN',true);
+		// Keep parenthesized LIKE binds from being mistaken for grouping.
+		$where = $this->normalizeParenthesizedBind($where,'LIKE');
 		switch ($engine) {
 			case 'jig':
 				$ncond = $this->_jig_parse_filter($where, $args);
@@ -140,6 +142,47 @@ class CortexQueryParser extends \Prefab {
 			$cache->set($cacheHash,$ncond,$ttl);
 		}
 		return $ncond;
+	}
+
+	/**
+	 * Normalize OP(?) without rewriting matching text inside quoted literals.
+	 * @param string $where
+	 * @param string $operator
+	 * @param bool $optionalBind
+	 * @return string
+	 */
+	protected function normalizeParenthesizedBind($where,$operator,$optionalBind=false) {
+		$pattern = $this->parenthesizedBindPattern($operator,$optionalBind);
+		return preg_replace_callback($pattern,
+			static function($match) use($operator) {
+				if (!empty($match['literal']))
+					return $match[0];
+				return strtoupper($operator).' '.($match['bind'] ?? '');
+			},$where);
+	}
+
+	/**
+	 * Build a pattern that finds OP(?) while treating quoted text as opaque.
+	 * @param string $operator
+	 * @param bool $optionalBind
+	 * @return string
+	 */
+	protected function parenthesizedBindPattern($operator,$optionalBind) {
+		$bind = $optionalBind
+			? '(?<bind>\?|:\w+)?'
+			: '(?<bind>\?|:\w+)';
+		return '~(?<literal>'.$this->quotedLiteralPattern().')|'.
+			'\b'.preg_quote($operator,'~').'\b\s*\(\s*'.$bind.'\s*\)~i';
+	}
+
+	/**
+	 * Match single- or double-quoted SQL-style text, including escaped quotes.
+	 * @return string
+	 */
+	protected function quotedLiteralPattern() {
+		return <<<'REGEX'
+'(?:''|\\.|[^'\\])*'|"(?:""|\\.|[^"\\])*"
+REGEX;
 	}
 
 	/**
@@ -389,17 +432,25 @@ class CortexQueryParser extends \Prefab {
 	protected function _mongo_parse_relational_op($part, &$args, \DB\Mongo $db, $fieldConf=null) {
 		if (is_null($part))
 			return $part;
-		if (preg_match('/<=|>=|<>|!=|==?|<|>|\bnot\s+like\b|\blike\b|\bnot\s+in\b|\bin\b/i', $part, $match)) {
+		if ($match = $this->matchMongoOperator($part)) {
+			$operator = $match['operator'];
+			$operatorOffset = $match['offset'];
 			$var = str_contains($part, '?') ? array_shift($args) : null;
-			$exp = explode($match[0], $part, 2);
+			// Split at the matched operator. explode() would split at the
+			// first occurrence, which is incorrect for fields named `in` or
+			// `like` when they are themselves used with those operators.
+			$exp = [
+				substr($part, 0, $operatorOffset),
+				substr($part, $operatorOffset + strlen($operator))
+			];
 			$key = trim($exp[0]);
 			// unbound value
 			if (is_numeric($exp[1]))
 				$var = $exp[1];
 			// field comparison
 			elseif (!str_contains($exp[1], '?'))
-				return ['$where' => 'this.'.$key.' '.$match[0].' this.'.trim($exp[1])];
-			$upart = preg_replace('/\s+/', ' ', strtoupper(trim($match[0])));
+				return ['$where' => 'this.'.$key.' '.$operator.' this.'.trim($exp[1])];
+			$upart = preg_replace('/\s+/', ' ', strtoupper(trim($operator)));
 			// MongoID shorthand
 			if ($key == '_id' || (isset($fieldConf[$key]) && isset($fieldConf[$key]['relType']))) {
 				if (is_null($var)) {
@@ -427,17 +478,38 @@ class CortexQueryParser extends \Prefab {
 			elseif (in_array($upart, ['IN','NOT IN'])) {
 				if ($var instanceof CortexCollection)
 					$var = $var->getAll('_id',true);
+				if (!is_array($var) || empty($var))
+					throw new \Exception(self::E_INBINDVALUE);
 				$var = [($upart=='NOT IN')?'$nin':'$in' => array_values($var)];
 			} // translate operators
-			elseif (!in_array($match[0], ['==', '='])) {
+			elseif (!in_array($operator, ['==', '='])) {
 				$opr = str_replace(['<>', '<', '>', '!', '='],
-					['$ne', '$lt', '$gt', '$n', 'e'], $match[0]);
+					['$ne', '$lt', '$gt', '$n', 'e'], $operator);
 				$var = [$opr => (is_string($var) && strtolower($var) == 'null') ? null :
 						(is_object($var) ? $var : (is_numeric($var) ? $var + 0 : $var))];
 			}
 			return [$key => $var];
 		}
 		return $part;
+	}
+
+	/**
+	 * Find the first relational operator in a Mongo filter expression.
+	 * Keyword operators must be separated from the field name, so fields named
+	 * "in" and "like" are still valid identifiers.
+	 * @param string $part
+	 * @return array|null
+	 */
+	protected function matchMongoOperator($part) {
+		$symbolic = '<=|>=|<>|!=|==?|<|>';
+		$keyword = '(?<=\s)(?:NOT\s+LIKE|LIKE|NOT\s+IN|IN)(?=\s|\()';
+		if (!preg_match('~'.$symbolic.'|'.$keyword.'~i',
+			$part,$match,PREG_OFFSET_CAPTURE))
+			return null;
+		return [
+			'operator' => $match[0][0],
+			'offset' => $match[0][1]
+		];
 	}
 
 	/**
