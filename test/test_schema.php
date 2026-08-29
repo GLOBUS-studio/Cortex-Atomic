@@ -623,6 +623,24 @@ class Test_Schema {
 		// ========================================================================
 		// 18. MySQL metadata preservation must not affect unrelated types/drivers
 		// ========================================================================
+		foreach ([
+			'BOOL', 'BOOLEAN', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'MIDDLEINT',
+			'INT', 'INT1', 'INT2', 'INT3', 'INT4', 'INT8', 'INTEGER', 'BIGINT',
+			'FLOAT', 'FLOAT4', 'FLOAT8', 'DOUBLE', 'DOUBLE PRECISION', 'DECIMAL',
+			'NUMERIC', 'REAL', 'DEC', 'FIXED', 'NUMBER', 'SERIAL',
+			'BIGINT(20) UNSIGNED', '  double precision UNSIGNED', "\tint4(11) zerofill",
+		] as $numericType) {
+			$test->expect(
+				\DB\Cortex\Schema\Schema::isNumericType($numericType),
+				$type.': shared numeric type classifier accepts '.$numericType
+			);
+		}
+		foreach (['POINT', 'BIT', 'VARCHAR(255)', 'INT9', 'SOMETHINGINT'] as $nonNumericType) {
+			$test->expect(
+				!\DB\Cortex\Schema\Schema::isNumericType($nonNumericType),
+				$type.': shared numeric type classifier rejects '.$nonNumericType
+			);
+		}
 		$tmRef = new \ReflectionClass(\DB\Cortex\Schema\TableModifier::class);
 		$tmProbe = $tmRef->newInstanceWithoutConstructor();
 		$copyModifiers = $tmRef->getMethod('_mysqlCopyNumericModifiers');

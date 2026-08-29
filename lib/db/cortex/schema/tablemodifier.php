@@ -542,11 +542,8 @@ class TableModifier extends TableBuilder {
 	protected function _mysqlCopyNumericModifiers($oldType,$newType) {
 		// SERIAL is a complete BIGINT UNSIGNED AUTO_INCREMENT UNIQUE alias,
 		// not a base type to which the live column's modifiers can be appended.
-		if (preg_match('/^\s*serial\b/i',$newType))
-			return $newType;
-		if (!preg_match('/^\s*(?:tinyint|smallint|mediumint|int(?:1|2|3|4|8)?|integer|bigint|'.
-			'float|float4|float8|double(?:\s+precision)?|decimal|numeric|real|dec|fixed|number|'.
-			'bool|boolean|middleint)\b/i',$newType))
+		if (preg_match('/^\s*serial\b/i',$newType)
+			|| !Schema::isNumericType($newType))
 			return $newType;
 		// SIGNED explicitly requests removal of UNSIGNED. ZEROFILL implies
 		// UNSIGNED, so do not preserve either modifier in that case.

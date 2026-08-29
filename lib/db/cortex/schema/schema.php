@@ -126,6 +126,16 @@ class Schema {
 	protected
 		$name;
 
+	/**
+	 * MySQL and Cortex numeric type names accepted by the schema helpers.
+	 * This also accepts type modifiers and size declarations after the base
+	 * type, for example `BIGINT(20) UNSIGNED`.
+	 */
+	private const NUMERIC_TYPE_PATTERN =
+		'/^\s*(?:BOOL|BOOLEAN|TINYINT|SMALLINT|MEDIUMINT|MIDDLEINT|'.
+		'INT(?:1|2|3|4|8)?|INTEGER|BIGINT|FLOAT(?:4|8)?|'.
+		'DOUBLE(?:\s+PRECISION)?|DECIMAL|NUMERIC|REAL|DEC|FIXED|NUMBER|SERIAL)\b/i';
+
 	public static
 		$strict=FALSE;
 
@@ -172,6 +182,16 @@ class Schema {
 	 */
 	public function getDataTypes() {
 		return $this->dataTypes;
+	}
+
+	/**
+	 * Check whether a logical or SQL type is numeric.
+	 *
+	 * @param string $type
+	 * @return bool
+	 */
+	public static function isNumericType($type) {
+		return (bool)preg_match(self::NUMERIC_TYPE_PATTERN,(string)$type);
 	}
 
 	/**

@@ -16,6 +16,7 @@
 namespace DB\Cortex;
 
 use DB\Cortex;
+use DB\Cortex\Schema\Schema;
 
 trait RelationTrait {
 
@@ -267,12 +268,7 @@ trait RelationTrait {
 			// valid JSON; text PKs must be JSON-quoted to match ["value"].
 			$relFields = $rel->getFieldConfiguration();
 			$relPKType = $relFields[$relPK]['type'] ?? 'INT4';
-			$isNumericPK = (bool)preg_match(
-				'/^\s*(?:BOOL|BOOLEAN|TINYINT|SMALLINT|MEDIUMINT|MIDDLEINT|'.
-				'INT(?:1|2|3|4|8)?|INTEGER|BIGINT|FLOAT(?:4|8)?|'.
-				'DOUBLE(?:\s+PRECISION)?|DECIMAL|NUMERIC|REAL|DEC|FIXED|NUMBER|SERIAL)\b/i',
-				(string)$relPKType
-			);
+			$isNumericPK = Schema::isNumericType($relPKType);
 			$jsonCandidate = 'CAST('.$alias_r.'.'.$qRelPK.' AS CHAR)';
 			if (!$isNumericPK)
 				$jsonCandidate = 'JSON_QUOTE('.$jsonCandidate.')';
