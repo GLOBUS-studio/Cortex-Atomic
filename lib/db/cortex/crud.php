@@ -232,13 +232,17 @@ trait CrudTrait {
 								$relConf = $this->fieldConf[$key]['belongs-to-many'];
 								$rel = $this->getRelFromConf($relConf,$key);
 								$hasSet = $rel->find($has_filter,$has_options,$ttl);
-								if ($hasSet) {
+								if (!$hasSet)
+									$result = true; // relation filter resolved to an empty set
+								else {
 									$relField = is_array($relConf) ? $relConf[1] : '_id';
 									$matchIDs = array_unique($hasSet->getAll($relField, true));
 									// scan own records for JSON arrays containing these IDs
 									$allOwn = $this->mapper->find(null,null,$ttl);
 									$ownIDs = [];
 									if ($allOwn) foreach ($allOwn as $own) {
+										if (!$own->exists($key))
+											continue; // an unset optional relation is an empty relation
 										$raw = $own->get($key);
 										$arr = is_string($raw) ? json_decode($raw ?: '', true) : $raw;
 										if (is_array($arr) && array_intersect($arr, $matchIDs))
@@ -255,7 +259,7 @@ trait CrudTrait {
 							throw new \Exception(self::E_HAS_COND);
 					}
 					if (isset($result) && !isset($addToFilter))
-						return false;
+						return $count ? 0 : false;
 					elseif (isset($addToFilter)) {
 						if (!$filter)
 							$filter = [''];

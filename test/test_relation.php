@@ -266,6 +266,51 @@ class Test_Relation {
 			$type.': belongs-to-many: result is collection'
 		);
 
+		// the schemaless belongs-to-many scan must treat an
+		// unset optional relation as empty and preserve an empty related result.
+		$scanTag = new \TagModel();
+		$scanTag->title = 'BTM scan target';
+		$scanTag->save();
+
+		$scanMatch = new \NewsModel();
+		$scanMatch->title = 'BTM scan match';
+		$scanMatch->tags = [$scanTag->_id];
+		$scanMatch->save();
+
+		$scanUnset = new \NewsModel();
+		$scanUnset->title = 'BTM scan unset';
+		$scanUnset->save();
+
+		$emptyScan = (new \NewsModel())
+			->has('tags', ['title = ?', 'BTM scan missing'])
+			->find();
+		$emptyScanCount = (new \NewsModel())
+			->has('tags', ['title = ?', 'BTM scan missing'])
+			->count();
+		$test->expect(
+			$emptyScan === false && $emptyScanCount === 0,
+			$type.': DEBUG H14 belongs-to-many has() preserves an empty related result'
+		);
+
+		$scanError = null;
+		$scanTitles = [];
+		try {
+			$scanResult = (new \NewsModel())
+				->has('tags', ['title = ?', 'BTM scan target'])
+				->find();
+			if ($scanResult)
+				$scanTitles = $scanResult->getAll('title', true);
+		} catch (\Throwable $e) {
+			$scanError = $e;
+		}
+		$test->expect(
+			$scanError === null && $scanTitles === ['BTM scan match'],
+			$type.': #41 belongs-to-many has() treats an unset optional field as empty'
+		);
+
+		(new \NewsModel())->erase(['title IN ?', ['BTM scan match', 'BTM scan unset']]);
+		(new \TagModel())->erase(['title = ?', 'BTM scan target']);
+
 
 		// has-one relation
 		///////////////////////////////////
