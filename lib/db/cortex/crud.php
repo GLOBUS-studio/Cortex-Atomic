@@ -149,10 +149,7 @@ trait CrudTrait {
 		}
 		$hasJoin = [];
 		if ($this->hasCond) {
-			// has() conditions belong to exactly one query. A nested condition is
-			// read from $this->hasCond while the loop runs, so the set is cleared
-			// in a finally block. That also covers the early return below and any
-			// exception thrown by a relation query.
+			// Clear has() conditions after every query attempt.
 			$hasConditions = $this->hasCond;
 			try {
 				foreach($hasConditions as $key => $hasCond) {
@@ -244,7 +241,12 @@ trait CrudTrait {
 										if (!$own->exists($key))
 											continue; // an unset optional relation is an empty relation
 										$raw = $own->get($key);
-										$arr = is_string($raw) ? json_decode($raw ?: '', true) : $raw;
+										if (is_string($raw))
+											$arr = json_decode($raw ?: '', true);
+										elseif (is_iterable($raw))
+											$arr = iterator_to_array($raw, false);
+										else
+											$arr = $raw;
 										if (is_array($arr) && array_intersect($arr, $matchIDs))
 											$ownIDs[] = $own->get($this->primary);
 									}
@@ -429,9 +431,7 @@ trait CrudTrait {
 		} else
 			$this->mapper->reset();
 		$this->emit('load');
-		// The relation filters of this load belong to the record it fetched.
-		// Hand them to the deferred relation loading and start the next query
-		// of this model with an empty filter set.
+		// Transfer this query's filters to deferred relation loading.
 		$this->deferRelFilter();
 		// eager-load declared relations for single record
 		if (!empty($this->eagerLoad) && $this->valid()) {

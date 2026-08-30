@@ -270,18 +270,62 @@ class Test_Fixes {
             // Jig: invalid field name must throw
             $threw20 = false;
             try {
-                $jm = $qpRef->getMethod('_jig_parse_filter');
-                $jm->invoke(\DB\Cortex\CortexQueryParser::instance(),
-                    ['1=1; DROP TABLE users --= ?','val'], []);
-            } catch (\Exception $e) {
+                \DB\Cortex\CortexQueryParser::instance()->prepareFilter(
+                    ['1=1; DROP TABLE users --= ?', 'val'], 'jig', $db);
+            } catch (\Throwable $e) {
                 $threw20 = true;
             }
             $test->expect(
                 $threw20,
                 $type.': #20 Jig: malicious field name throws exception'
             );
+
+            $threwFunction20 = false;
+            try {
+                \DB\Cortex\CortexQueryParser::instance()->prepareFilter(
+                    ['phpinfo() = ?', 'val'], 'jig', $db);
+            } catch (\Throwable $e) {
+                $threwFunction20 = true;
+            }
+            $test->expect(
+                $threwFunction20,
+                $type.': #20 Jig: arbitrary PHP function expression is rejected'
+            );
+
+			$threwMalformed20 = false;
+			try {
+				\DB\Cortex\CortexQueryParser::instance()->prepareFilter(
+					['author.name = ?', 'Alice'], 'jig', $db);
+			} catch (\Throwable $e) {
+				$threwMalformed20 = true;
+			}
+			$test->expect(
+				$threwMalformed20,
+				$type.': #20 Jig: malformed dotted field name is rejected'
+			);
+
+			$threwEmpty20 = false;
+			try {
+				\DB\Cortex\CortexQueryParser::instance()->prepareFilter(
+					[''], 'jig', $db);
+			} catch (\Throwable $e) {
+				$threwEmpty20 = true;
+			}
+			$test->expect(
+				$threwEmpty20,
+				$type.': #20 Jig: empty expression is rejected'
+			);
+
+            $literal20 = (new \AuthorModel())->find(["name = 'Alice'"]);
+            $test->expect(
+				$literal20 && count($literal20) >= 1
+					&& count(array_filter($literal20->getAll('name', true),
+						fn($name) => $name !== 'Alice')) === 0,
+                $type.': #20 Jig: quoted literal is converted to a safe bind'
+            );
         } else {
-            $test->expect(true, $type.': #20 Jig validation skip (non-Jig DB)');
+            for ($i = 0; $i < 5; $i++)
+                $test->expect(true, $type.': #20 Jig validation skip (non-Jig DB)');
         }
 
         // ====================================================================

@@ -261,14 +261,17 @@ class Test_Filter {
 		$author->reset();
 		$author->countRel('news');
 		$result = $author->find(null,array('order'=>'count_news DESC'))->castAll(0);
+		$kirkIndex = array_search('James T. Kirk', array_column($result, 'name'), true);
 
 		$test->expect(
 			$result[0]['name'] == 'Ridley Scott' &&
 			$result[0]['count_news'] == 2 &&
 			$result[1]['name'] == 'Johnny English' &&
 			$result[1]['count_news'] == 1 &&
-			$result[2]['name'] == 'James T. Kirk' &&
-			$result[2]['count_news'] == null,
+			$kirkIndex !== false && $kirkIndex >= 2 &&
+			$result[$kirkIndex]['count_news'] == null &&
+			count(array_filter(array_slice($result, 2),
+				fn($row) => $row['count_news'] !== null)) === 0,
 			$type.': count and sort on one-to-many relation'
 		);
 

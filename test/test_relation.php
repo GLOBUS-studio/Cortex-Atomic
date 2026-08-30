@@ -281,6 +281,16 @@ class Test_Relation {
 		$scanUnset->title = 'BTM scan unset';
 		$scanUnset->save();
 
+		$scanNull = new \NewsModel();
+		$scanNull->title = 'BTM scan null';
+		$scanNull->tags = null;
+		$scanNull->save();
+
+		$scanEmpty = new \NewsModel();
+		$scanEmpty->title = 'BTM scan empty';
+		$scanEmpty->tags = [];
+		$scanEmpty->save();
+
 		$emptyScan = (new \NewsModel())
 			->has('tags', ['title = ?', 'BTM scan missing'])
 			->find();
@@ -305,10 +315,11 @@ class Test_Relation {
 		}
 		$test->expect(
 			$scanError === null && $scanTitles === ['BTM scan match'],
-			$type.': #41 belongs-to-many has() treats an unset optional field as empty'
+			$type.': #41 belongs-to-many has() treats missing, null and empty optional fields as empty'
 		);
 
-		(new \NewsModel())->erase(['title IN ?', ['BTM scan match', 'BTM scan unset']]);
+		foreach (['BTM scan match', 'BTM scan unset', 'BTM scan null', 'BTM scan empty'] as $scanTitle)
+			(new \NewsModel())->erase(['title = ?', $scanTitle]);
 		(new \TagModel())->erase(['title = ?', 'BTM scan target']);
 
 
@@ -692,12 +703,7 @@ class Test_Relation {
 			$type.': #20 erase(filter) deletes a relation match on a model with m:m relations'
 		);
 
-		// ================================================================
-		// #22 relation-filter lifecycle
-		// A relation filter belongs to exactly one query. After that query it
-		// stays available for deferred relation access on the record it
-		// fetched, and it must not take part in any later query.
-		// ================================================================
+		// #22 relation-filter lifecycle.
 		$rfAuthor = new AuthorModel();
 		$rfAuthor->name = 'RelFilter Owner';
 		$rfAuthor->save();
@@ -760,6 +766,29 @@ class Test_Relation {
 			$type.': #22 a later unfiltered load() returns the complete relation'
 		);
 
+		// Deferred relation access consumes its filter.
+		$rfConsumed = new AuthorModel();
+		$rfConsumed->filter('news', ['title = ?', 'RF Alpha']);
+		$rfConsumed->load(['name = ?', 'RelFilter Owner']);
+		$rfConsumedFirst = $rfConsumed->news ? count($rfConsumed->news) : 0;
+		$rfConsumed->reset(false, false);
+		$rfConsumedSecond = $rfConsumed->news ? count($rfConsumed->news) : 0;
+		$test->expect(
+			$rfConsumedFirst == 1 && $rfConsumedSecond == 2,
+			$type.': #22 deferred relation access consumes its lazy filter'
+		);
+
+		// A new filter chain clears previous deferred filters.
+		$rfNewChain = new AuthorModel();
+		$rfNewChain->filter('news', ['title = ?', 'RF Alpha']);
+		$rfNewChain->load(['name = ?', 'RelFilter Owner']);
+		$rfNewChain->filter('profile', ['message = ?', 'RF profile']);
+		$rfNewChainNews = $rfNewChain->news ? count($rfNewChain->news) : 0;
+		$test->expect(
+			$rfNewChainNews == 2,
+			$type.': #22 a new filter chain clears prior lazy relation filters'
+		);
+
 		// pending filters of different relations stay separate
 		$rfMulti = new AuthorModel();
 		$rfMulti->filter('news', ['title = ?', 'RF Alpha']);
@@ -814,8 +843,7 @@ class Test_Relation {
 			$type.': #22 a clone does not inherit the pending relation filter'
 		);
 
-		// a collection model keeps the filter for deferred access, not for its
-		// own next query
+		// Collection models keep filters only for deferred access.
 		$rfColl = new AuthorModel();
 		$rfColl->filter('news', ['title = ?', 'RF Alpha']);
 		$rfCollResult = $rfColl->find(['name = ?', 'RelFilter Owner']);
@@ -828,8 +856,7 @@ class Test_Relation {
 			$type.': #22 a collection model does not share its pending filter with its own query'
 		);
 
-		// remove the records of this block again, the following test files
-		// share the data set created above
+		// Remove shared test data.
 		(new NewsModel())->erase(['title IN ?', ['RF Alpha', 'RF Beta']]);
 		(new ProfileModel())->erase(['message = ?', 'RF profile']);
 		(new AuthorModel())->erase(['name = ?', 'RelFilter Owner']);

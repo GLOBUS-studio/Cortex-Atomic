@@ -274,6 +274,8 @@ REGEX;
 	 * @return array
 	 */
 	protected function _jig_parse_filter($where, $args) {
+		if (!is_string($where) || trim($where) === '')
+			throw new \Exception(sprintf(self::E_INVALID_FIELD_NAME, trim((string)$where)));
 		$parts = $this->splitLogical($where);
 		if (str_contains($where, ':'))
 			list($parts, $args) = $this->convertNamedParams($parts, $args);
@@ -281,6 +283,10 @@ REGEX;
 		foreach ($parts as &$part) {
 			if (preg_match('/\s*\b(AND|OR)\b\s*/i',$part))
 				continue;
+			if (preg_match('/;|--|\/\*|\*\//', $part, $invalid))
+				throw new \Exception(sprintf(self::E_INVALID_FIELD_NAME, trim($part)));
+			if (preg_match('/\b[a-z_][\w-]*(?:\s*\.|\s*\()/i', $part, $invalid))
+				throw new \Exception(sprintf(self::E_INVALID_FIELD_NAME, trim($invalid[0])));
 			// prefix field names
 			$part = preg_replace_callback('/([a-z_][\w-]*)(?=[\s<>=!)]|$)/i',
 				function($m) {
@@ -291,7 +297,8 @@ REGEX;
 			// value comparison
 			if (str_contains($part, '?')) {
 				$val = array_shift($args);
-				preg_match('/(@\w+)/i', $part, $match);
+				if (!preg_match('/(@\w+)/i', $part, $match))
+					throw new \Exception(sprintf(self::E_INVALID_FIELD_NAME, trim($part)));
 				$skipVal=false;
 				// find like operator
 				if (str_contains($upart = strtoupper($part), ' @LIKE ')) {
