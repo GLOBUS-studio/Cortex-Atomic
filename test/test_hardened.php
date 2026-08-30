@@ -108,7 +108,9 @@ class Test_Hardened {
 		$tags = $data['tags'];
 		$news = $data['news'];
 
-		// Multiple has() conditions must not depend on relation order.
+		// ================================================================
+		// 0. Multiple has() conditions and transient filter cleanup
+		// ================================================================
 		if (str_contains($type, 'sql')) {
 			$multiHas = new \AuthorModel();
 			$multiHasResult = $multiHas
@@ -130,6 +132,35 @@ class Test_Hardened {
 				$type.': count() agrees with chained has() conditions'
 			);
 		}
+
+		$staleHas = new \AuthorModel();
+		$emptyHasResult = $staleHas->has('news', ['title = ?', '__missing__'])->find();
+		$plainAfterEmptyHas = $staleHas->find();
+		$test->expect(
+			$emptyHasResult === false
+				&& $plainAfterEmptyHas && count($plainAfterEmptyHas) === 10,
+			$type.': an unsatisfied has() is consumed by find()'
+		);
+
+		$emptyFilteredFind = new \AuthorModel();
+		$emptyFilteredFind->filter('news', ['title = ?', 'First Post']);
+		$emptyFilteredFind->find(['name = ?', '__missing__']);
+		$aliceAfterEmptyFind = $emptyFilteredFind->find(['name = ?', 'Alice']);
+		$test->expect(
+			$aliceAfterEmptyFind && count($aliceAfterEmptyFind[0]->news) === 2,
+			$type.': relation filters are cleared after an empty find()'
+		);
+
+		$filteredLoad = new \AuthorModel();
+		$filteredLoad->filter('news', ['title = ?', 'First Post']);
+		$filteredLoad->load(['name = ?', 'Alice']);
+		$firstLoadedNewsCount = $filteredLoad->news ? count($filteredLoad->news) : 0;
+		$filteredLoad->load(['name = ?', 'Alice']);
+		$secondLoadedNewsCount = $filteredLoad->news ? count($filteredLoad->news) : 0;
+		$test->expect(
+			$firstLoadedNewsCount === 1 && $secondLoadedNewsCount === 2,
+			$type.': relation filters affect one load() only'
+		);
 
 		// ================================================================
 		//  1. findByRawSQL - basic

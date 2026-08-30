@@ -6,7 +6,8 @@
  *  Extracted from Cortex class.
  *  Methods: has, orHas, _hasRefsIn, _refSubQuery, _hasRefsInMM,
  *           _hasJoinMM_sql, _hasJoin_sql, _sql_left_join, _sql_mergeRelCondition,
- *           filter, clearFilter, mergeWithRelFilter, mergeFilter, getRelFilterOption,
+ *           filter, clearFilter, deferRelFilter, mergeWithRelFilter, mergeFilter,
+ *           getRelFilterOption, mergeWithLazyRelFilter, getLazyRelFilterOption,
  *           countRel, _mongo_addGroup, getForeignKeysArray,
  *           getRelInstance, getRelFromConf, rel
  *
@@ -309,17 +310,56 @@ trait RelationTrait {
 
 	/**
 	 * removes one or all relation filter
+	 * The pending set of the deferred relation loading is cleared as well, so a
+	 * later relation access cannot revive a filter the caller just removed.
 	 * @param null|string $key
 	 */
 	public function clearFilter($key = null) {
-		if (!$key)
+		if (!$key) {
 			$this->relFilter = [];
-		elseif(isset($this->relFilter[$key]))
+			$this->lazyRelFilter = [];
+		} else {
 			unset($this->relFilter[$key]);
+			unset($this->lazyRelFilter[$key]);
+		}
 	}
 
 	/**
-	 * merge the relation filter to the query criteria if it exists
+	 * hand the configured relation filters over to the deferred relation loading
+	 * The filters describe the record that was just loaded. They must not take
+	 * part in the next query of this model, but a later relation access on that
+	 * record must still apply them.
+	 * @param array|null $filters filters to hand over, defaults to the own set
+	 */
+	protected function deferRelFilter($filters = null) {
+		$this->lazyRelFilter = (($filters === null) ? $this->relFilter : $filters) ?: [];
+		$this->relFilter = [];
+	}
+
+	/**
+	 * merge a pending deferred relation filter into the query criteria
+	 * @param string $key
+	 * @param array $crit
+	 * @return array
+	 */
+	protected function mergeWithLazyRelFilter($key, $crit) {
+		if (!empty($this->lazyRelFilter[$key][0]))
+			$crit = $this->mergeFilter([$this->lazyRelFilter[$key][0],$crit]);
+		return $crit;
+	}
+
+	/**
+	 * returns the option condition of a pending deferred relation filter
+	 * @param string $key
+	 * @return array|null
+	 */
+	protected function getLazyRelFilterOption($key) {
+		return !empty($this->lazyRelFilter[$key][1])
+			? $this->lazyRelFilter[$key][1] : null;
+	}
+
+	/**
+	 * merge the relation filter of the next query to the criteria if it exists
 	 * @param string $key
 	 * @param array $crit
 	 * @return array
@@ -353,7 +393,7 @@ trait RelationTrait {
 	}
 
 	/**
-	 * returns the option condition for a relation filter, if defined
+	 * returns the option condition of the next query relation filter, if defined
 	 * @param string $key
 	 * @return array null
 	 */
@@ -536,9 +576,10 @@ trait RelationTrait {
 	 * @param array $relConf
 	 * @param string $key
 	 * @param bool $pushFilter
+	 * @param bool $lazy read the pending deferred filters instead of the query filters
 	 * @return Cortex
 	 */
-	protected function getRelInstance($model=null, $relConf=null, $key='', $pushFilter=false) {
+	protected function getRelInstance($model=null, $relConf=null, $key='', $pushFilter=false, $lazy=false) {
 		if (!$model && !$relConf)
             throw new \Exception(self::E_MISSING_REL_CONF);
 		$relConf = $model ? $model::resolveConfiguration() : $relConf;
@@ -564,8 +605,9 @@ trait RelationTrait {
 				$rel->fields($this->relWhitelist[$key][1],true);
 		}
 		if ($pushFilter && !empty($key)) {
-			if (isset($this->relFilter[$key.'.'])) {
-				foreach($this->relFilter[$key.'.'] as $fkey=>$conf)
+			$nested = $lazy ? $this->lazyRelFilter : $this->relFilter;
+			if (isset($nested[$key.'.'])) {
+				foreach($nested[$key.'.'] as $fkey=>$conf)
 					$rel->filter($fkey,$conf[0],$conf[1]);
 			}
 			if (isset($this->hasCond[$key.'.'])) {
@@ -580,12 +622,13 @@ trait RelationTrait {
 	 * get relation model from config
 	 * @param $relConf
 	 * @param $key
+	 * @param bool $lazy read the pending deferred filters instead of the query filters
 	 * @return Cortex
 	 */
-	protected function getRelFromConf(&$relConf, $key) {
+	protected function getRelFromConf(&$relConf, $key, $lazy=false) {
 		if (!is_array($relConf))
 			$relConf = [$relConf, '_id'];
-		$rel = $this->getRelInstance($relConf[0],null,$key,true);
+		$rel = $this->getRelInstance($relConf[0],null,$key,true,$lazy);
 		if($this->dbsType=='sql' && $relConf[1] == '_id')
 			$relConf[1] = $rel->primary;
 		return $rel;

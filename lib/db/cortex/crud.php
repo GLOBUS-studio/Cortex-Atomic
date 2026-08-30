@@ -52,6 +52,7 @@ trait CrudTrait {
 		$result = $this->filteredFind($filter,$options,$ttl);
 		if (empty($result)) {
 			$this->eagerLoad = [];
+			$this->clearFilter();
 			return false;
 		}
 		foreach($result as &$record) {
@@ -148,120 +149,128 @@ trait CrudTrait {
 		}
 		$hasJoin = [];
 		if ($this->hasCond) {
-			foreach($this->hasCond as $key => $hasCond) {
-				$addToFilter = null;
-				$result = null;
-				if ($deep = str_contains($key,'.')) {
-					$key = rtrim($key,'.');
-					$hasCond = [null,null];
-				}
-				list($has_filter,$has_options) = $hasCond;
-				$isOrCondition = $has_options['OR'] ?? FALSE;
-				$type = $this->fieldConf[$key]['relType'];
-				$fromConf = $this->fieldConf[$key][$type];
-				switch($type) {
-					case 'has-one':
-					case 'has-many':
-						if (!is_array($fromConf))
-                            throw new \Exception(sprintf(self::E_REL_CONF_INC, $key));
-						$id = $this->dbsType == 'sql' ? $this->primary : '_id';
-						if ($type=='has-many' && isset($fromConf['relField'])
-							&& $fromConf['hasRel'] == 'belongs-to-one')
-							$id=$fromConf['relField'];
-						// many-to-many
-						if ($type == 'has-many' && $fromConf['hasRel'] == 'has-many') {
+			// has() conditions belong to exactly one query. A nested condition is
+			// read from $this->hasCond while the loop runs, so the set is cleared
+			// in a finally block. That also covers the early return below and any
+			// exception thrown by a relation query.
+			$hasConditions = $this->hasCond;
+			try {
+				foreach($hasConditions as $key => $hasCond) {
+					$addToFilter = null;
+					$result = null;
+					if ($deep = str_contains($key,'.')) {
+						$key = rtrim($key,'.');
+						$hasCond = [null,null];
+					}
+					list($has_filter,$has_options) = $hasCond;
+					$isOrCondition = $has_options['OR'] ?? FALSE;
+					$type = $this->fieldConf[$key]['relType'];
+					$fromConf = $this->fieldConf[$key][$type];
+					switch($type) {
+						case 'has-one':
+						case 'has-many':
+							if (!is_array($fromConf))
+								throw new \Exception(sprintf(self::E_REL_CONF_INC, $key));
+							$id = $this->dbsType == 'sql' ? $this->primary : '_id';
+							if ($type=='has-many' && isset($fromConf['relField'])
+								&& $fromConf['hasRel'] == 'belongs-to-one')
+								$id=$fromConf['relField'];
+							// many-to-many
+							if ($type == 'has-many' && $fromConf['hasRel'] == 'has-many') {
+								if (!$deep && $this->dbsType == 'sql'
+									&& !isset($has_options['limit']) && !isset($has_options['offset'])) {
+									$hasJoin = array_merge($hasJoin,
+										$this->_hasJoinMM_sql($key,$hasCond,$filter,$options));
+									if (!isset($options['group']))
+										$options['group'] = '';
+									$groupFields = explode(',', preg_replace('/"/','',$options['group']));
+									if (!in_array($this->table.'.'.$this->primary,$groupFields)) {
+										$options['group'] = ($options['group']?',':'').$this->table.'.'.$this->primary;
+										$groupFields[]=$this->table.'.'.$this->primary;
+									}
+									// all non-aggregated fields need to be present in the GROUP BY clause
+									if (isset($m_refl_adhoc) && preg_match('/sybase|dblib|odbc|sqlsrv|ibm/i',$this->db->driver()))
+										foreach (array_diff($this->mapper->fields(),array_keys($m_refl_adhoc)) as $field)
+											if (!in_array($this->table.'.'.$field,$groupFields))
+												$options['group'] .= ', '.$this->table.'.'.$field;
+								}
+								elseif ($result = $this->_hasRefsInMM($key,$has_filter,$has_options,$ttl))
+									$addToFilter = [$id.' IN ?', $result];
+							}
+							// *-to-one
+							elseif (!$deep && $this->dbsType == 'sql') {
+								// use sub-query inclusion
+								$has_filter=$this->mergeFilter([$has_filter,
+									[$this->rel($key)->getTable().'.'.$fromConf[1].'='.$this->getTable().'.'.$id]]);
+								$result = $this->_refSubQuery($key,$has_filter,$has_options);
+								$addToFilter = array_merge(['exists('.$result[0].')'],$result[1]);
+							}
+							elseif ($result = $this->_hasRefsIn($key,$has_filter,$has_options,$ttl))
+								$addToFilter = [$id.' IN ?', $result];
+							break;
+						// one-to-*
+						case 'belongs-to-one':
 							if (!$deep && $this->dbsType == 'sql'
 								&& !isset($has_options['limit']) && !isset($has_options['offset'])) {
-								$hasJoin = array_merge($hasJoin,
-									$this->_hasJoinMM_sql($key,$hasCond,$filter,$options));
-								if (!isset($options['group']))
-									$options['group'] = '';
-								$groupFields = explode(',', preg_replace('/"/','',$options['group']));
-								if (!in_array($this->table.'.'.$this->primary,$groupFields)) {
-									$options['group'] = ($options['group']?',':'').$this->table.'.'.$this->primary;
-									$groupFields[]=$this->table.'.'.$this->primary;
+								if (!is_array($fromConf))
+									$fromConf = [$fromConf, '_id'];
+								$rel = $fromConf[0]::resolveConfiguration();
+								if ($fromConf[1] == '_id')
+									$fromConf[1] = $rel['primary'];
+								$hasJoin[] = $this->_hasJoin_sql($key,$rel['table'],$hasCond,$filter,$options);
+							} elseif ($result = $this->_hasRefsIn($key,$has_filter,$has_options,$ttl))
+									$addToFilter = [$key.' IN ?', $result];
+							break;
+						// unidirectional m:m (JSON-stored IDs)
+						case 'belongs-to-many':
+							if (!$deep && $this->dbsType == 'sql'
+								&& ($btmSql = $this->_hasBTM_sql($key,$hasCond)) !== false) {
+								// native JSON query — no full table scan
+								$addToFilter = $btmSql;
+							} else {
+								// Mongo / Jig / unsupported SQL driver: PHP-based scan fallback
+								$relConf = $this->fieldConf[$key]['belongs-to-many'];
+								$rel = $this->getRelFromConf($relConf,$key);
+								$hasSet = $rel->find($has_filter,$has_options,$ttl);
+								if ($hasSet) {
+									$relField = is_array($relConf) ? $relConf[1] : '_id';
+									$matchIDs = array_unique($hasSet->getAll($relField, true));
+									// scan own records for JSON arrays containing these IDs
+									$allOwn = $this->mapper->find(null,null,$ttl);
+									$ownIDs = [];
+									if ($allOwn) foreach ($allOwn as $own) {
+										$raw = $own->get($key);
+										$arr = is_string($raw) ? json_decode($raw ?: '', true) : $raw;
+										if (is_array($arr) && array_intersect($arr, $matchIDs))
+											$ownIDs[] = $own->get($this->primary);
+									}
+									if (!empty($ownIDs))
+										$addToFilter = [$this->primary.' IN ?', array_unique($ownIDs)];
+									else
+										$result = true; // mark as resolved but empty
 								}
-								// all non-aggregated fields need to be present in the GROUP BY clause
-								if (isset($m_refl_adhoc) && preg_match('/sybase|dblib|odbc|sqlsrv|ibm/i',$this->db->driver()))
-									foreach (array_diff($this->mapper->fields(),array_keys($m_refl_adhoc)) as $field)
-										if (!in_array($this->table.'.'.$field,$groupFields))
-											$options['group'] .= ', '.$this->table.'.'.$field;
 							}
-							elseif ($result = $this->_hasRefsInMM($key,$has_filter,$has_options,$ttl))
-								$addToFilter = [$id.' IN ?', $result];
-						}
-						// *-to-one
-						elseif (!$deep && $this->dbsType == 'sql') {
-							// use sub-query inclusion
-							$has_filter=$this->mergeFilter([$has_filter,
-								[$this->rel($key)->getTable().'.'.$fromConf[1].'='.$this->getTable().'.'.$id]]);
-							$result = $this->_refSubQuery($key,$has_filter,$has_options);
-							$addToFilter = array_merge(['exists('.$result[0].')'],$result[1]);
-						}
-						elseif ($result = $this->_hasRefsIn($key,$has_filter,$has_options,$ttl))
-							$addToFilter = [$id.' IN ?', $result];
-						break;
-					// one-to-*
-					case 'belongs-to-one':
-						if (!$deep && $this->dbsType == 'sql'
-							&& !isset($has_options['limit']) && !isset($has_options['offset'])) {
-							if (!is_array($fromConf))
-								$fromConf = [$fromConf, '_id'];
-							$rel = $fromConf[0]::resolveConfiguration();
-							if ($fromConf[1] == '_id')
-								$fromConf[1] = $rel['primary'];
-							$hasJoin[] = $this->_hasJoin_sql($key,$rel['table'],$hasCond,$filter,$options);
-						} elseif ($result = $this->_hasRefsIn($key,$has_filter,$has_options,$ttl))
-								$addToFilter = [$key.' IN ?', $result];
-						break;
-					// unidirectional m:m (JSON-stored IDs)
-					case 'belongs-to-many':
-						if (!$deep && $this->dbsType == 'sql'
-							&& ($btmSql = $this->_hasBTM_sql($key,$hasCond)) !== false) {
-							// native JSON query — no full table scan
-							$addToFilter = $btmSql;
-						} else {
-							// Mongo / Jig / unsupported SQL driver: PHP-based scan fallback
-							$relConf = $this->fieldConf[$key]['belongs-to-many'];
-							$rel = $this->getRelFromConf($relConf,$key);
-							$hasSet = $rel->find($has_filter,$has_options,$ttl);
-							if ($hasSet) {
-								$relField = is_array($relConf) ? $relConf[1] : '_id';
-								$matchIDs = array_unique($hasSet->getAll($relField, true));
-								// scan own records for JSON arrays containing these IDs
-								$allOwn = $this->mapper->find(null,null,$ttl);
-								$ownIDs = [];
-								if ($allOwn) foreach ($allOwn as $own) {
-									$raw = $own->get($key);
-									$arr = is_string($raw) ? json_decode($raw ?: '', true) : $raw;
-									if (is_array($arr) && array_intersect($arr, $matchIDs))
-										$ownIDs[] = $own->get($this->primary);
-								}
-								if (!empty($ownIDs))
-									$addToFilter = [$this->primary.' IN ?', array_unique($ownIDs)];
-								else
-									$result = true; // mark as resolved but empty
-							}
-						}
-						break;
-					default:
-                        throw new \Exception(self::E_HAS_COND);
+							break;
+						default:
+							throw new \Exception(self::E_HAS_COND);
+					}
+					if (isset($result) && !isset($addToFilter))
+						return false;
+					elseif (isset($addToFilter)) {
+						if (!$filter)
+							$filter = [''];
+						if (!empty($filter[0]))
+							$filter[0] .= $isOrCondition?' or ':' and ';
+						$cond = array_shift($addToFilter);
+						if ($this->dbsType=='sql')
+							$cond = $this->queryParser->sql_prependTableToFields($cond,$this->table);
+						$filter[0] .= '('.$cond.')';
+						$filter = array_merge($filter, $addToFilter);
+					}
 				}
-				if (isset($result) && !isset($addToFilter))
-					return false;
-				elseif (isset($addToFilter)) {
-					if (!$filter)
-						$filter = [''];
-					if (!empty($filter[0]))
-						$filter[0] .= $isOrCondition?' or ':' and ';
-					$cond = array_shift($addToFilter);
-					if ($this->dbsType=='sql')
-						$cond = $this->queryParser->sql_prependTableToFields($cond,$this->table);
-					$filter[0] .= '('.$cond.')';
-					$filter = array_merge($filter, $addToFilter);
-				}
+			} finally {
+				$this->hasCond = null;
 			}
-			$this->hasCond = null;
 		}
 		$filter = $this->queryParser->prepareFilter($filter, $this->dbsType, $this->db, $this->fieldConf, $this->primary);
 		if ($this->dbsType=='sql') {
@@ -416,6 +425,10 @@ trait CrudTrait {
 		} else
 			$this->mapper->reset();
 		$this->emit('load');
+		// The relation filters of this load belong to the record it fetched.
+		// Hand them to the deferred relation loading and start the next query
+		// of this model with an empty filter set.
+		$this->deferRelFilter();
 		// eager-load declared relations for single record
 		if (!empty($this->eagerLoad) && $this->valid()) {
 			$cc = new CortexCollection();

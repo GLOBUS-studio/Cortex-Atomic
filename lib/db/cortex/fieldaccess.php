@@ -385,7 +385,7 @@ trait FieldAccessTrait {
 					// get config for this field
 					$relConf = $fields[$key]['belongs-to-one'];
 					// fetch related model
-					$rel = $this->getRelFromConf($relConf,$key);
+					$rel = $this->getRelFromConf($relConf,$key,true);
 					// am i part of a result collection?
 					if ($cx = $this->getCollection()) {
 						// does the collection has cached results for this key?
@@ -394,8 +394,8 @@ trait FieldAccessTrait {
 							$relKeys = array_unique($cx->getAll($key,true));
 							// find related models
 							$crit = [$relConf[1].' IN ?', $relKeys];
-							$relSet = $rel->find($this->mergeWithRelFilter($key, $crit),
-								$this->getRelFilterOption($key),$this->_ttl);
+							$relSet = $rel->find($this->mergeWithLazyRelFilter($key, $crit),
+								$this->getLazyRelFilterOption($key),$this->_ttl);
 							// cache relSet, sorted by ID
 							$cx->setRelSet($key, $relSet ? $relSet->getBy($relConf[1]) : NULL);
 						}
@@ -404,9 +404,9 @@ trait FieldAccessTrait {
 						$this->fieldsCache[$key] = $result ? $result[0] : NULL;
 					} else {
 						$crit = [$relConf[1].' = ?', $this->get($key, true)];
-						$crit = $this->mergeWithRelFilter($key, $crit);
+						$crit = $this->mergeWithLazyRelFilter($key, $crit);
 						$this->fieldsCache[$key] = $rel->findone($crit,
-							$this->getRelFilterOption($key),$this->_ttl);
+							$this->getLazyRelFilterOption($key),$this->_ttl);
 					}
 				}
 			}
@@ -416,7 +416,7 @@ trait FieldAccessTrait {
 				$fromConf = $fields[$key][$type];
 				if (!is_array($fromConf))
                     throw new \Exception(sprintf(self::E_REL_CONF_INC, $key));
-				$rel = $this->getRelInstance($fromConf[0],null,$key,true);
+				$rel = $this->getRelInstance($fromConf[0],null,$key,true,true);
 				$relFieldConf = $rel->getFieldConfiguration();
 				$relType = isset($relFieldConf[$fromConf[1]]['belongs-to-one']) ?
 					'belongs-to-one' : 'has-many';
@@ -434,8 +434,8 @@ trait FieldAccessTrait {
 							// emit eager loading
 							$relKeys = $cx->getAll($toConf[1],true);
 							$crit = [$fromConf[1].' IN ?', $relKeys];
-							$relSet = $rel->find($this->mergeWithRelFilter($key,$crit),
-								$this->getRelFilterOption($key),$this->_ttl);
+							$relSet = $rel->find($this->mergeWithLazyRelFilter($key,$crit),
+								$this->getLazyRelFilterOption($key),$this->_ttl);
 							$cx->setRelSet($key, $relSet ? $relSet->getBy($fromConf[1],true) : NULL);
 						}
 						$result = $cx->getSubset($key, [$this->get($toConf[1])]);
@@ -444,8 +444,8 @@ trait FieldAccessTrait {
 					}	// no collection
 					elseif (($val=$this->getRaw($toConf[1]))) {
 						$crit=[$fromConf[1].' = ?',$val];
-						$crit=$this->mergeWithRelFilter($key,$crit);
-						$opt=$this->getRelFilterOption($key);
+						$crit=$this->mergeWithLazyRelFilter($key,$crit);
+						$opt=$this->getLazyRelFilterOption($key);
 						$this->fieldsCache[$key]=(($type=='has-one')
 							?$rel->findone($crit,$opt,$this->_ttl)
 							:$rel->find($crit,$opt,$this->_ttl))?:NULL;
@@ -496,10 +496,10 @@ trait FieldAccessTrait {
 								$cx->setRelSet($key.'_pivot', $pivotRel);
 								// preload all rels
 								$pivotKeys = array_unique($pivotKeys);
-								$fRel = $this->getRelInstance($fromConf[0],null,$key,true);
+								$fRel = $this->getRelInstance($fromConf[0],null,$key,true,true);
 								$crit = [$id.' IN ?', $pivotKeys];
-								$relSet = $fRel->find($this->mergeWithRelFilter($key, $crit),
-									$this->getRelFilterOption($key),$this->_ttl);
+								$relSet = $fRel->find($this->mergeWithLazyRelFilter($key, $crit),
+									$this->getLazyRelFilterOption($key),$this->_ttl);
 								$cx->setRelSet($key, $relSet ? $relSet->getBy($id) : NULL);
 								unset($fRel);
 							}
@@ -532,12 +532,12 @@ trait FieldAccessTrait {
 								}
 								// create foreign table mapper
 								unset($rel);
-								$rel = $this->getRelInstance($fromConf[0],null,$key,true);
+								$rel = $this->getRelInstance($fromConf[0],null,$key,true,true);
 								// load foreign models
 								$filter = [$id.' IN ?', $fkeys];
-								$filter = $this->mergeWithRelFilter($key, $filter);
+								$filter = $this->mergeWithLazyRelFilter($key, $filter);
 								$this->fieldsCache[$key] = $rel->find($filter,
-									$this->getRelFilterOption($key),$this->_ttl);
+									$this->getLazyRelFilterOption($key),$this->_ttl);
 							}
 						}
 					}
@@ -554,7 +554,7 @@ trait FieldAccessTrait {
 				else {
 					// create foreign table mapper
 					$relConf = $fields[$key]['belongs-to-many'];
-					$rel = $this->getRelFromConf($relConf,$key);
+					$rel = $this->getRelFromConf($relConf,$key,true);
 					$fkeys = [];
 					foreach ($result as $el)
 						$fkeys[] = (is_int($el)||ctype_digit((string)$el))?(int)$el:(string)$el;
@@ -574,8 +574,8 @@ trait FieldAccessTrait {
 							// get related models
 							if (!empty($relKeys)) {
 								$crit = [$relConf[1].' IN ?', array_unique($relKeys)];
-								$relSet = $rel->find($this->mergeWithRelFilter($key, $crit),
-									$this->getRelFilterOption($key),$this->_ttl);
+								$relSet = $rel->find($this->mergeWithLazyRelFilter($key, $crit),
+									$this->getLazyRelFilterOption($key),$this->_ttl);
 								// cache relSet, sorted by ID
 								$cx->setRelSet($key, $relSet ? $relSet->getBy($relConf[1]) : NULL);
 							} else
@@ -587,9 +587,9 @@ trait FieldAccessTrait {
 					} else {
 						// load foreign models
 						$filter = [$relConf[1].' IN ?', $fkeys];
-						$filter = $this->mergeWithRelFilter($key, $filter);
+						$filter = $this->mergeWithLazyRelFilter($key, $filter);
 						$this->fieldsCache[$key] = $rel->find($filter,
-							$this->getRelFilterOption($key),$this->_ttl);
+							$this->getLazyRelFilterOption($key),$this->_ttl);
 					}
 				}
 			}

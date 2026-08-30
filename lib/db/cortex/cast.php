@@ -194,6 +194,9 @@ trait CastTrait {
 			$cx = clone($this);
 			$cx->reset(false);
 			$cx->mapper = $mapper;
+			// the result model inherits the relation filters of the query that
+			// produced it, but only for its own deferred relation access
+			$cx->deferRelFilter($this->relFilter);
 		}
 		$cx->emit('load');
 		return $cx;
@@ -299,6 +302,9 @@ trait CastTrait {
 			$this->countFields=[];
 			$this->preBinds=[];
 			$this->grp_stack=null;
+			// relation filters of both lifecycle phases are query state too
+			$this->relFilter=[];
+			$this->lazyRelFilter=[];
 		}
 		// set default values
 		if (($this->dbsType == 'jig' || $this->dbsType == 'mongo')
