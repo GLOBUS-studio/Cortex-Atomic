@@ -7,10 +7,13 @@
  */
 /** In-memory probe with a configurable driver name. */
 class SchemaRenameProbeDB extends \DB\SQL {
-	function __construct($driver) {
+	private $probeVersion;
+	function __construct($driver, $version = '3.0.0') {
 		parent::__construct('sqlite::memory:');
 		$this->engine = $driver;
+		$this->probeVersion = $version;
 	}
+	function version() { return $this->probeVersion; }
 }
 
 /** Column catalog that fails if native renames reconstruct its definition. */
@@ -724,8 +727,8 @@ class Test_Schema {
 		// ========================================================================
 		// 19. Native renames must not reconstruct a MySQL column definition.
 		// ========================================================================
-		$renameProbe = function($driver) {
-			$probeDb = new \SchemaRenameProbeDB($driver);
+		$renameProbe = function($driver, $version = '3.0.0') {
+			$probeDb = new \SchemaRenameProbeDB($driver, $version);
 			$probeTm = new \SchemaRenameProbeModifier('probe_table',
 				new \DB\Cortex\Schema\Schema($probeDb));
 			// trigger_error(E_USER_ERROR) is not a Throwable, so promote it
@@ -757,18 +760,123 @@ class Test_Schema {
 				.' ('.$renameSqlsrv.')'
 		);
 
-		// MySQL must still rebuild the definition with valid metadata.
+		// Older MySQL and MariaDB releases must still rebuild the definition.
 		\SchemaRenameProbeModifier::$probeType = 'varchar(128)';
 		\SchemaRenameProbeModifier::$probeDefault = FALSE;
-		$renameMysql = $renameProbe('mysql');
+		$renameMysql = $renameProbe('mysql', '8.0.2');
+		$renameMaria = $renameProbe('mysql', '5.5.5-10.5.2-MariaDB');
+		$renameMariaDistro = $renameProbe('mysql',
+			'5.5.5-10.4.34-MariaDB-0ubuntu0.22.04.1');
+		$renameUnknown = $renameProbe('mysql', 'not-a-server-version');
 		\SchemaRenameProbeModifier::$probeType = 'date';
 		\SchemaRenameProbeModifier::$probeDefault = 'CUR_STAMP';
 		$test->expect(
 			$renameMysql === 'ALTER TABLE `probe_table` CHANGE `event_date`'
 				.' `renamed_date` varchar(128) NULL;',
-			$type.': MySQL rename still rebuilds the column definition'
+			$type.': MySQL 8.0.2 rename rebuilds the column definition'
 				.' ('.$renameMysql.')'
 		);
+		$test->expect(
+			$renameMaria === 'ALTER TABLE `probe_table` CHANGE `event_date`'
+				.' `renamed_date` varchar(128) NULL;',
+			$type.': MariaDB 10.5.2 rename rebuilds the column definition'
+				.' ('.$renameMaria.')'
+		);
+		$test->expect(
+			$renameMariaDistro === 'ALTER TABLE `probe_table` CHANGE `event_date`'
+				.' `renamed_date` varchar(128) NULL;',
+			$type.': MariaDB distro suffix is not mistaken for the server version'
+				.' ('.$renameMariaDistro.')'
+		);
+		$test->expect(
+			$renameUnknown === 'ALTER TABLE `probe_table` CHANGE `event_date`'
+				.' `renamed_date` varchar(128) NULL;',
+			$type.': unknown MySQL version safely uses the compatibility branch'
+				.' ('.$renameUnknown.')'
+		);
+
+		$nativeRename = 'ALTER TABLE `probe_table` RENAME COLUMN'
+			.' `event_date` TO `renamed_date`;';
+		foreach ([
+			['MySQL 8.0.3', '8.0.3'],
+			['MySQL 8.4', '8.4.0'],
+			['MariaDB 10.5.3', '10.5.3-MariaDB'],
+			['MariaDB compatibility prefix', '5.5.5-10.11.6-MariaDB-0+deb12u1'],
+		] as [$server, $version]) {
+			$query = $renameProbe('mysql', $version);
+			$test->expect(
+				$query === $nativeRename,
+				$type.': '.$server.' uses native RENAME COLUMN ('.$query.')'
+			);
+		}
+
+		// Native MySQL/MariaDB rename preserves metadata absent from Column.
+		if (str_contains($db->driver(), 'mysql')) {
+			$nativeCheck = new \ReflectionMethod(
+				\DB\Cortex\Schema\TableModifier::class,
+				'_mysqlSupportsRenameColumn'
+			);
+			$nativeCheck->setAccessible(true);
+			$checkModifier = $schema->alterTable('native_rename_version_probe');
+			if ($nativeCheck->invoke($checkModifier)) {
+				$tMetadata = 'test_schema_rename_metadata';
+				if (in_array($tMetadata, $schema->getTables()))
+					$schema->dropTable($tMetadata);
+				$qtMetadata = $db->quotekey($tMetadata);
+				$db->exec("CREATE TABLE $qtMetadata ("
+					."`id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY, "
+					."`base_value` INT NOT NULL DEFAULT 1, "
+					."`payload` VARCHAR(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin "
+					."NOT NULL COMMENT 'payload metadata', "
+					."`touched` TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) "
+					."ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'touch metadata', "
+					."`computed` INT GENERATED ALWAYS AS (`base_value` + 1) STORED "
+					."COMMENT 'generated metadata')");
+
+				$renameMetadata = $schema->alterTable($tMetadata);
+				$renameMetadata->renameColumn('payload', 'content');
+				$renameMetadata->build();
+				$renameTimestamp = $schema->alterTable($tMetadata);
+				$renameTimestamp->renameColumn('touched', 'changed_at');
+				$renameTimestamp->build();
+				$renameGenerated = $schema->alterTable($tMetadata);
+				$renameGenerated->renameColumn('computed', 'next_id');
+				$renameGenerated->build();
+
+				$contentMeta = $this->mysqlColumnMetadata($db, $tMetadata, 'content');
+				$timestampMeta = $this->mysqlColumnMetadata($db, $tMetadata, 'changed_at');
+				$generatedMeta = $this->mysqlColumnMetadata($db, $tMetadata, 'next_id');
+				$test->expect(
+					$contentMeta !== null
+						&& $contentMeta['COLUMN_COMMENT'] === 'payload metadata'
+						&& $contentMeta['CHARACTER_SET_NAME'] === 'utf8mb4'
+						&& $contentMeta['COLLATION_NAME'] === 'utf8mb4_bin',
+					$type.': native rename preserves comment, character set and collation'
+				);
+				$test->expect(
+					$timestampMeta !== null
+						&& $timestampMeta['COLUMN_COMMENT'] === 'touch metadata'
+						&& stripos($timestampMeta['EXTRA'], 'on update current_timestamp') !== false,
+					$type.': native rename preserves comment and ON UPDATE metadata'
+				);
+				$test->expect(
+					$generatedMeta !== null
+						&& $generatedMeta['COLUMN_COMMENT'] === 'generated metadata'
+						&& $generatedMeta['GENERATION_EXPRESSION'] !== ''
+						&& stripos($generatedMeta['EXTRA'], 'stored generated') !== false,
+					$type.': native rename preserves generated expression, storage and comment'
+				);
+				$db->exec("INSERT INTO $qtMetadata (`content`) VALUES ('abc')");
+				$generatedValue = $db->exec(
+					"SELECT `next_id` FROM $qtMetadata ORDER BY `id` DESC LIMIT 1"
+				);
+				$test->expect(
+					!empty($generatedValue) && (int)$generatedValue[0]['next_id'] === 2,
+					$type.': renamed generated column remains functional'
+				);
+				$schema->dropTable($tMetadata);
+			}
+		}
 
 		// ========================================================================
 		// CLEANUP
@@ -836,5 +944,17 @@ class Test_Schema {
 			];
 		}
 		return null;
+	}
+
+	/** Fetch MySQL/MariaDB metadata that Cortex Column cannot reconstruct. */
+	private function mysqlColumnMetadata($db, string $table, string $column): ?array {
+		$cols = $db->exec(
+			"SELECT COLUMN_COMMENT, CHARACTER_SET_NAME, COLLATION_NAME, EXTRA,
+					GENERATION_EXPRESSION
+			 FROM information_schema.COLUMNS
+			 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?",
+			[$table, $column]
+		);
+		return empty($cols) ? null : $cols[0];
 	}
 }

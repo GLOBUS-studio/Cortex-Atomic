@@ -341,17 +341,19 @@ class TableModifier extends TableBuilder {
 			$quotedTable=$this->db->quotekey($this->name);
 			$quotedColumn=$this->db->quotekey($name);
 			$quotedColumnNew=$this->db->quotekey($new_name);
-			// Only MySQL needs the full column definition reconstructed.
+			// MySQL-protocol servers need a version-dependent rename path.
 			$driver=$this->db->driver();
 			if (strpos($driver,'mysql')!==FALSE) {
-				// CHANGE replaces the whole definition, so preserve known metadata.
-				// TODO: on MySQL 8.0.4+ / MariaDB 10.5.2+ use
-				// RENAME COLUMN to preserve metadata that Column cannot represent.
-				$col=new Column($new_name,$this);
-				$col->copyfrom($existing_columns[$name]);
-				$col->passThrough();
-				$this->queries[]="ALTER TABLE $quotedTable CHANGE $quotedColumn ".
-					$col->getColumnQuery().";";
+				if ($this->_mysqlSupportsRenameColumn())
+					$this->queries[]=
+						"ALTER TABLE $quotedTable RENAME COLUMN $quotedColumn TO $quotedColumnNew;";
+				else {
+					$col=new Column($new_name,$this);
+					$col->copyfrom($existing_columns[$name]);
+					$col->passThrough();
+					$this->queries[]="ALTER TABLE $quotedTable CHANGE $quotedColumn ".
+						$col->getColumnQuery().";";
+				}
 			} elseif (preg_match('/mssql|sybase|dblib|sqlsrv/',$driver)) {
 				$this->suppress=TRUE;
 				$this->queries[]="sp_rename [$this->name.$name], '$new_name', 'Column'";
@@ -361,6 +363,21 @@ class TableModifier extends TableBuilder {
 			else
 				trigger_error(sprintf(self::TEXT_ENGINE_NOT_SUPPORTED,$driver),E_USER_ERROR);
 		}
+	}
+
+	/** Check for native MySQL/MariaDB column rename support. */
+	protected function _mysqlSupportsRenameColumn() {
+		$serverVersion=(string)$this->db->version();
+		if (stripos($serverVersion,'mariadb')!==FALSE) {
+			// e.g. 10.5.3-MariaDB or 5.5.5-10.11.6-MariaDB-0+deb12u1
+			if (!preg_match('/(\d+(?:\.\d+){1,2})-MariaDB\b/i',
+					$serverVersion,$version))
+				return FALSE;
+			return version_compare($version[1],'10.5.3','>=');
+		}
+		if (!preg_match('/\d+(?:\.\d+){1,2}/',$serverVersion,$version))
+			return FALSE;
+		return version_compare($version[0],'8.0.3','>=');
 	}
 
 	/**
