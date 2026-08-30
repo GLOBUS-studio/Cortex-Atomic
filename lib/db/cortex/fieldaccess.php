@@ -236,14 +236,13 @@ trait FieldAccessTrait {
 				in_array($fields[$key]['type'], [Schema::DT_DATE,Schema::DT_DATETIME])
 			)
 				$val=NULL;
-			// convert array content
-			if (is_array($val) && $this->dbsType == 'sql') {
-				if ($fields[$key]['type']==self::DT_SERIALIZED)
+			// encode JSON-backed fields for SQL, which stores them as text
+			if ($this->dbsType == 'sql') {
+				$type = $fields[$key]['type'] ?? null;
+				if ($val !== null && in_array($type, [self::DT_JSON,self::DT_SERIALIZED], true))
 					$val=json_encode($val);
-				elseif ($fields[$key]['type']==self::DT_JSON)
-					$val=json_encode($val);
-				else
-                    throw new \Exception(sprintf(self::E_ARRAY_DATATYPE,$key));
+				elseif (is_array($val))
+					throw new \Exception(sprintf(self::E_ARRAY_DATATYPE,$key));
 			}
 		} else {
 			// custom setter
@@ -549,7 +548,7 @@ trait FieldAccessTrait {
 				$fields[$key]['type'] = self::DT_JSON;
 				$result = $this->getRaw($key);
 				if ($this->dbsType == 'sql')
-					$result = json_decode($result?:'', true);
+					$result = $this->decodeJsonValue($result);
 				if (!is_array($result))
 					$this->fieldsCache[$key] = $result;
 				else {
@@ -598,9 +597,9 @@ trait FieldAccessTrait {
 			elseif (isset($fields[$key]['type'])) {
 				if ($this->dbsType == 'sql') {
 					if ($fields[$key]['type'] == self::DT_SERIALIZED)
-						$this->fieldsCache[$key] = $this->decodeSerializedValue($this->mapper->{$key}?:'');
+						$this->fieldsCache[$key] = $this->decodeSerializedValue($this->mapper->{$key});
 					elseif ($fields[$key]['type'] == self::DT_JSON)
-						$this->fieldsCache[$key] = json_decode($this->mapper->{$key}?:'',true);
+						$this->fieldsCache[$key] = $this->decodeJsonValue($this->mapper->{$key});
 				}
 				if ($this->exists($key) && preg_match('/BOOL/i',$fields[$key]['type'])) {
 					$field_val = $this->mapper->{$key};

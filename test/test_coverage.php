@@ -285,6 +285,57 @@ class Test_Coverage {
 		);
 
 		// ========================================================================
+		// 16b. DT_JSON scalar values survive set/save/load and copyfrom()
+		// ========================================================================
+		$jsonScalarCases = [
+			'zero' => 0,
+			'false' => false,
+			'empty-string' => '',
+			'string' => 'hello',
+			'integer' => 42,
+			'float' => 1.5,
+		];
+		$jsonIdField = str_contains($type, 'sql') ? 'id' : '_id';
+		foreach ($jsonScalarCases as $label => $value) {
+			$jsonCx = new \DB\Cortex($db, $tname);
+			$jsonCx->setFieldConfiguration($fields);
+			$jsonCx->title = 'json_scalar_'.$label;
+			$jsonCx->data = $value;
+			$jsonCx->save();
+			$jsonId = $jsonCx->_id;
+			$jsonCx->reset();
+			$jsonCx->load([$jsonIdField.' = ?', $jsonId]);
+			$jsonCast = $jsonCx->cast();
+			$test->expect(
+				$jsonCx->get('data') === $value && $jsonCast['data'] === $value,
+				$type.': DT_JSON scalar '.$label.' survives save/load via get() and cast()'
+			);
+
+			if (str_contains($type, 'sql')) {
+				$rawRow = $db->exec(
+					'SELECT '.$db->quotekey('data').' FROM '.$db->quotekey($tname)
+					.' WHERE '.$db->quotekey('title').' = ?',
+					['json_scalar_'.$label]
+				);
+				$rawJson = $rawRow[0]['data'] ?? null;
+				$decodedRaw = $rawJson === null ? null : json_decode($rawJson, true);
+				$test->expect(
+					json_last_error() === JSON_ERROR_NONE && $decodedRaw === $value,
+					$type.': DT_JSON scalar '.$label.' is stored as valid JSON'
+				);
+			}
+
+			$copyCx = new \DB\Cortex($db, $tname);
+			$copyCx->setFieldConfiguration($fields);
+			$copyCx->copyfrom(['data' => json_encode($value)]);
+			$copyCast = $copyCx->cast();
+			$test->expect(
+				$copyCx->get('data') === $value && $copyCast['data'] === $value,
+				$type.': DT_JSON scalar '.$label.' survives copyfrom()'
+			);
+		}
+
+		// ========================================================================
 		// 17. DT_SERIALIZED field - save & load
 		// ========================================================================
 		$cx->reset();

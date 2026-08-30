@@ -18,12 +18,25 @@ use DB\Cortex;
 trait CastTrait {
 
 	/**
-	 * Decode a value stored as DT_SERIALIZED.
-	 * Tries json_decode first; falls back to unserialize for legacy data.
-	 * @param string $raw
+	 * Decode a value stored as DT_JSON.
+	 * Empty database values represent an unset nullable field; valid falsy JSON
+	 * tokens such as "0", "false", and "\"\"" must still be decoded.
+	 * @param string|null $raw
 	 * @return mixed
 	 */
-	protected function decodeSerializedValue(string $raw): mixed {
+	protected function decodeJsonValue(?string $raw): mixed {
+		return $raw === null || $raw === '' ? null : json_decode($raw, true);
+	}
+
+	/**
+	 * Decode a value stored as DT_SERIALIZED.
+	 * Tries json_decode first; falls back to unserialize for legacy data.
+	 * @param string|null $raw
+	 * @return mixed
+	 */
+	protected function decodeSerializedValue(?string $raw): mixed {
+		if ($raw === null || $raw === '')
+			return null;
 		$decoded = json_decode($raw, true);
 		if (json_last_error() === JSON_ERROR_NONE)
 			return $decoded;
@@ -98,17 +111,17 @@ trait CastTrait {
 					elseif (isset($this->fieldConf[$key]['type'])) {
 						if ($this->dbsType == 'sql') {
 							if ($this->fieldConf[$key]['type'] == self::DT_SERIALIZED)
-								$val=$this->decodeSerializedValue($mp->mapper->{$key}?:'');
+								$val=$this->decodeSerializedValue($mp->mapper->{$key});
 							elseif ($this->fieldConf[$key]['type'] == self::DT_JSON)
-								$val=json_decode($mp->mapper->{$key}?:'', true);
+								$val=$this->decodeJsonValue($mp->mapper->{$key});
 						}
 						elseif ($this->dbsType == 'mongo') {
 							$ftype = $this->fieldConf[$key]['type'];
 							if ($ftype == self::DT_JSON || $ftype == self::DT_SERIALIZED) {
-								if (is_string($val))
-									$val = ($ftype == self::DT_JSON)
-										? json_decode($val ?: '', true)
-										: $this->decodeSerializedValue($val ?: '');
+								// Mongo stores DT_JSON values natively, including strings.
+								// Only deprecated DT_SERIALIZED strings need decoding.
+								if ($ftype == self::DT_SERIALIZED && is_string($val))
+									$val = $this->decodeSerializedValue($val);
 								elseif (is_object($val) && ($val instanceof \ArrayObject))
 									$val = json_decode(json_encode($val), true);
 							}
@@ -206,9 +219,9 @@ trait CastTrait {
 		foreach ($srcfields as $key => $val) {
 			if (isset($this->fieldConf[$key]) && isset($this->fieldConf[$key]['type'])) {
 				if ($this->fieldConf[$key]['type'] == self::DT_JSON && is_string($val))
-					$val = json_decode($val?:'',true);
+					$val = $this->decodeJsonValue($val);
 				elseif ($this->fieldConf[$key]['type'] == self::DT_SERIALIZED && is_string($val))
-					$val = $this->decodeSerializedValue($val?:'');
+					$val = $this->decodeSerializedValue($val);
 			}
 			$this->set($key, $val);
 		}
