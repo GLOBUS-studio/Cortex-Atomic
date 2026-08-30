@@ -10,6 +10,29 @@
  * collection mutation, copyfrom with relations,
  * afterinsert/afterupdate/aftererase hooks.
  */
+class TextKeyTagModel extends \DB\Cortex {
+	protected
+		$fieldConf = [
+			'code' => ['type' => \DB\SQL\Schema::DT_VARCHAR128],
+			'title' => ['type' => \DB\SQL\Schema::DT_VARCHAR128],
+		],
+		$primary = 'code',
+		$table = 'test_text_key_tags',
+		$db = 'DB';
+}
+
+class TextKeyPostModel extends \DB\Cortex {
+	protected
+		$fieldConf = [
+			'title' => ['type' => \DB\SQL\Schema::DT_VARCHAR128],
+			'tags' => [
+				'belongs-to-many' => ['\TextKeyTagModel', 'code'],
+			],
+		],
+		$table = 'test_text_key_posts',
+		$db = 'DB';
+}
+
 class Test_Hardened {
 
 	/**
@@ -1402,6 +1425,75 @@ class Test_Hardened {
 					&& count($titles72f) == 1,
 				$type.': has(tags,PHP) AND has(author,Eve) returns correct intersection'
 			);
+		}
+
+		// ================================================================
+		// 72g. belongs-to-many supports text primary keys
+		// ================================================================
+		if (str_contains($type, 'sql')) {
+			$schema72g = new \DB\Cortex\Schema\Schema($db);
+			foreach (['test_text_key_posts', 'test_text_key_tags'] as $table72g)
+				if (in_array($table72g, $schema72g->getTables()))
+					$schema72g->dropTable($table72g);
+
+			$db->exec('CREATE TABLE '.$db->quotekey('test_text_key_tags')
+				.' ('.$db->quotekey('code').' VARCHAR(128) NOT NULL PRIMARY KEY, '
+				.$db->quotekey('title').' VARCHAR(128))');
+
+			$posts72g = $schema72g->createTable('test_text_key_posts');
+			$posts72g->addColumn('title')->type(\DB\SQL\Schema::DT_VARCHAR128);
+			$posts72g->addColumn('tags')->type(\DB\SQL\Schema::DT_TEXT);
+			$posts72g->build();
+
+			$db->exec('INSERT INTO '.$db->quotekey('test_text_key_tags')
+				.' ('.$db->quotekey('code').','.$db->quotekey('title').') VALUES (?,?)',
+				['tag-alpha', 'Alpha']);
+			$db->exec('INSERT INTO '.$db->quotekey('test_text_key_tags')
+				.' ('.$db->quotekey('code').','.$db->quotekey('title').') VALUES (?,?)',
+				['tag"quoted', 'Quoted']);
+			$db->exec('INSERT INTO '.$db->quotekey('test_text_key_posts')
+				.' ('.$db->quotekey('title').','.$db->quotekey('tags').') VALUES (?,?)',
+				['Text key post', json_encode(['tag-alpha'])]);
+			$db->exec('INSERT INTO '.$db->quotekey('test_text_key_posts')
+				.' ('.$db->quotekey('title').','.$db->quotekey('tags').') VALUES (?,?)',
+				['Quoted text key post', json_encode(['tag"quoted'])]);
+
+			$textKeyMatched = false;
+			$textKeyError = '';
+			try {
+				$textKeyPost = new \TextKeyPostModel();
+				$textKeyPost->has('tags', ['title = ?', 'Alpha']);
+				$textKeyResult = $textKeyPost->find();
+				$textKeyMatched = $textKeyResult && count($textKeyResult) === 1
+					&& $textKeyResult[0]->title === 'Text key post';
+			} catch (\Throwable $e) {
+				$textKeyError = $e->getMessage();
+			}
+			$test->expect(
+				$textKeyMatched,
+				$type.': belongs-to-many has() supports text primary keys'
+					.($textKeyError ? ' ('.$textKeyError.')' : '')
+			);
+
+			$quotedKeyPost = new \TextKeyPostModel();
+			$quotedKeyPost->has('tags', ['title = ?', 'Quoted']);
+			$quotedKeyResult = $quotedKeyPost->find();
+			$test->expect(
+				$quotedKeyResult && count($quotedKeyResult) === 1
+					&& $quotedKeyResult[0]->title === 'Quoted text key post',
+				$type.': belongs-to-many text primary keys preserve JSON escaping'
+			);
+
+			$missingKeyPost = new \TextKeyPostModel();
+			$missingKeyPost->has('tags', ['title = ?', 'Missing']);
+			$missingKeyResult = $missingKeyPost->find();
+			$test->expect(
+				$missingKeyResult === false || count($missingKeyResult) === 0,
+				$type.': belongs-to-many text primary keys reject non-matching values'
+			);
+
+			$schema72g->dropTable('test_text_key_posts');
+			$schema72g->dropTable('test_text_key_tags');
 		}
 
 		// ================================================================

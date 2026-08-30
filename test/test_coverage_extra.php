@@ -594,7 +594,8 @@ class Test_Coverage_Extra {
 		$f3->set('TEST_DB_REF', $db);
 		$cxHive = new \DB\Cortex('TEST_DB_REF', $tname);
 		$cxHive->setFieldConfiguration($fields);
-		$expected_dbt = str_contains($type, 'sql') ? 'SQL' : 'Mongo';
+		$expected_dbt = str_contains($type, 'sql') ? 'SQL'
+			: ($type == 'jig' ? 'Jig' : 'Mongo');
 		$test->expect(
 			$cxHive->dbtype() === $expected_dbt,
 			$type.': constructor accepts $db as hive key string'

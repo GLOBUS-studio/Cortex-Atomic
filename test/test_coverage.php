@@ -25,6 +25,7 @@ class Test_Coverage {
 
 		$cx = new \DB\Cortex($db, $tname);
 		$cx->setFieldConfiguration($fields);
+		$idField = $type == 'jig' ? '_id' : 'id';
 
 		// ========================================================================
 		// 1. getMapper() - returns underlying Cursor
@@ -39,7 +40,8 @@ class Test_Coverage {
 		// 2. dbtype() - returns DB type string
 		// ========================================================================
 		$dbt = $cx->dbtype();
-		$expected_dbt = str_contains($type, 'sql') ? 'SQL' : 'Mongo';
+		$expected_dbt = str_contains($type, 'sql') ? 'SQL'
+			: ($type == 'jig' ? 'Jig' : 'Mongo');
 		$test->expect(
 			$dbt == $expected_dbt,
 			$type.': dbtype() returns correct engine type'
@@ -295,7 +297,7 @@ class Test_Coverage {
 		$cx->save();
 		$id = $cx->_id;
 		$cx->reset();
-		$cx->load(['id = ?', $id]);
+		$cx->load([$idField.' = ?', $id]);
 		$jsonVal = $cx->cast();
 		$test->expect(
 			is_array($jsonVal['data']) && $jsonVal['data']['foo'] == 'bar' && $jsonVal['data']['num'] == 123,
@@ -362,7 +364,7 @@ class Test_Coverage {
 		$cx->save();
 		$id = $cx->_id;
 		$cx->reset();
-		$cx->load(['id = ?', $id]);
+		$cx->load([$idField.' = ?', $id]);
 		$castS = $cx->cast();
 		$test->expect(
 			is_array($castS['blob']) && $castS['blob']['x'] == 1 && $castS['blob']['y'] == [2, 3],
@@ -415,7 +417,7 @@ class Test_Coverage {
 		$cx->save();
 		$id = $cx->_id;
 		$cx->reset();
-		$cx->load(['id = ?', $id]);
+		$cx->load([$idField.' = ?', $id]);
 		$castB = $cx->cast();
 		$test->expect(
 			$castB['active'] === true,
@@ -428,7 +430,7 @@ class Test_Coverage {
 		$cx->save();
 		$id = $cx->_id;
 		$cx->reset();
-		$cx->load(['id = ?', $id]);
+		$cx->load([$idField.' = ?', $id]);
 		$castB2 = $cx->cast();
 		$test->expect(
 			$castB2['active'] === false,
@@ -442,7 +444,7 @@ class Test_Coverage {
 		$cx->save();
 		$id = $cx->_id;
 		$cx->reset();
-		$cx->load(['id = ?', $id]);
+		$cx->load([$idField.' = ?', $id]);
 		$castB3 = $cx->cast();
 		$test->expect(
 			$castB3['active'] === null,
@@ -460,7 +462,7 @@ class Test_Coverage {
 		$cx->save();
 		$id = $cx->_id;
 		$cx->reset();
-		$cx->load(['id = ?', $id]);
+		$cx->load([$idField.' = ?', $id]);
 		$test->expect(
 			!empty($cx->stamp) && str_starts_with($cx->stamp, $time_before),
 			$type.': touch() with DT_DATE type sets current date'
@@ -470,7 +472,7 @@ class Test_Coverage {
 		$cx->touch('stamp', mktime(0, 0, 0, 6, 15, 2020));
 		$cx->save();
 		$cx->reset();
-		$cx->load(['id = ?', $id]);
+		$cx->load([$idField.' = ?', $id]);
 		$test->expect(
 			$cx->stamp == '2020-06-15',
 			$type.': touch() with custom timestamp'
