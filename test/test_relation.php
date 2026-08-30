@@ -455,6 +455,38 @@ class Test_Relation {
             $type.': whitelist on relations does not persist'
         );
 
+		// #20: relation-filtered erase must preserve field configuration while
+		// preparing Mongo filters, so string relation IDs become ObjectIds.
+		$eraseAuthor = new AuthorModel();
+		$eraseAuthor->name = 'Relation erase batch';
+		$eraseAuthor->save();
+		$eraseBatchId = (string)$eraseAuthor->_id;
+
+		$eraseProfile = new ProfileModel();
+		$eraseProfile->message = 'relation-erase-batch';
+		$eraseProfile->author = $eraseAuthor;
+		$eraseProfile->save();
+		(new ProfileModel())->erase(['author = ?', $eraseBatchId]);
+		$test->expect(
+			(new ProfileModel())->find(['message = ?', 'relation-erase-batch']) === false,
+			$type.': #20 erase(filter) deletes a relation match on a model without m:m relations'
+		);
+
+		$eraseAuthor = new AuthorModel();
+		$eraseAuthor->name = 'Relation erase m:m';
+		$eraseAuthor->save();
+		$eraseMmId = (string)$eraseAuthor->_id;
+
+		$eraseNews = new NewsModel();
+		$eraseNews->title = 'relation-erase-mm';
+		$eraseNews->author = $eraseAuthor;
+		$eraseNews->save();
+		(new NewsModel())->erase(['author = ?', $eraseMmId]);
+		$test->expect(
+			(new NewsModel())->find(['title = ?', 'relation-erase-mm']) === false,
+			$type.': #20 erase(filter) deletes a relation match on a model with m:m relations'
+		);
+
 		///////////////////////////////////
 		return $test->results();
 	}

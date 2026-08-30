@@ -434,7 +434,7 @@ trait CrudTrait {
 	 */
 	public function erase($filter = null) {
 		$rawFilter = $filter;
-		$filter = $this->queryParser->prepareFilter($filter, $this->dbsType, $this->db,null,$this->primary);
+		$filter = $this->queryParser->prepareFilter($filter, $this->dbsType, $this->db, $this->fieldConf, $this->primary);
 		if (!$filter) {
 			if ($this->emit('beforeerase')===false)
 				return false;
