@@ -571,6 +571,27 @@ trait RelationTrait {
 	}
 
 	/**
+	 * Resolve the child field and parent value used by a has-one relation.
+	 *
+	 * @param array $relConf
+	 * @param Cortex $rel
+	 * @return array
+	 */
+	protected function resolveHasOneLink(array $relConf, Cortex $rel) {
+		$relField = $relConf[1];
+		$relFieldConf = $rel->getFieldConfiguration()[$relField];
+		$toConf = $relFieldConf['belongs-to-one'];
+		$id = $this->dbsType == 'sql' ? $this->primary : '_id';
+		$localKey = is_array($toConf) ? $toConf[1] : $id;
+		return [
+			'field' => $relField,
+			'fieldConf' => $relFieldConf,
+			'localKey' => $localKey,
+			'localValue' => $this->getRaw($localKey),
+		];
+	}
+
+	/**
 	 * creates and caches related mapper objects
 	 * @param string $model
 	 * @param array $relConf

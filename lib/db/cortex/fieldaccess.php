@@ -174,17 +174,18 @@ trait FieldAccessTrait {
 			} elseif (isset($fields[$key]['has-one'])){
 				$relConf = $fields[$key]['has-one'];
 				if (empty($val)) {
-					$val = $this->get($key);
-					$val->set($relConf[1],NULL);
+					$val = NULL;
 				} else {
 					if (!$val instanceof Cortex) {
 						$rel = $this->getRelInstance($relConf[0],null,$key);
 						$rel->load(['_id = ?', $val]);
 						$val = $rel;
 					}
-					$val->set($relConf[1], $this->_id);
+					$link = $this->resolveHasOneLink($relConf, $val);
+					$val->set($link['field'], $link['localValue']);
 				}
 				$this->saveCsd[$key] = $val;
+				$this->fieldsCache[$key] = $val;
 				return $val;
 			} elseif (isset($fields[$key]['belongs-to-many'])) {
 				// many-to-many, unidirectional

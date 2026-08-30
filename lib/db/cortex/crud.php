@@ -615,7 +615,27 @@ trait CrudTrait {
 						}
 					}
 				} elseif($fields[$key]['relType'] == 'has-one') {
-					$val->save();
+					$relConf = $fields[$key]['has-one'];
+					$rel = $this->getRelInstance($relConf[0],null,$key);
+					$link = $this->resolveHasOneLink($relConf, $rel);
+					$refs = $rel->find([$link['field'].' = ?', $link['localValue']]);
+					$targetId = $val ? (string) $val->getRaw('_id') : NULL;
+					$canDetach = !isset($link['fieldConf']['nullable'])
+						|| $link['fieldConf']['nullable'] !== false;
+					foreach ($refs?:[] as $model) {
+						if ($targetId === NULL || (string) $model->getRaw('_id') !== $targetId) {
+							if (!$canDetach)
+								throw new \Exception(sprintf(self::E_HAS_ONE_NOT_NULLABLE,
+									$key, $link['field']));
+							$model->set($link['field'], NULL);
+							$model->save();
+						}
+					}
+					if ($val) {
+						$val->set($link['field'], $link['localValue']);
+						$val->save();
+					}
+					$this->fieldsCache[$key] = $val;
 				}
 			}
 			$this->saveCsd = [];

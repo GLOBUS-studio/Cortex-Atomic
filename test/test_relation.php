@@ -2,6 +2,31 @@
 
 use App\Controller;
 
+class StrictHasOneAuthorModel extends \DB\Cortex {
+
+	protected
+		$fieldConf = [
+			'name' => ['type' => \DB\SQL\Schema::DT_VARCHAR256],
+			'profile' => ['has-one' => ['\StrictHasOneProfileModel', 'author']],
+		],
+		$table = 'strict_has_one_author',
+		$db = 'DB';
+}
+
+class StrictHasOneProfileModel extends \DB\Cortex {
+
+	protected
+		$fieldConf = [
+			'message' => ['type' => \DB\SQL\Schema::DT_TEXT],
+			'author' => [
+				'belongs-to-one' => '\StrictHasOneAuthorModel',
+				'nullable' => false,
+			],
+		],
+		$table = 'strict_has_one_profile',
+		$db = 'DB';
+}
+
 class Test_Relation {
 
 	/**
@@ -39,12 +64,16 @@ class Test_Relation {
 		\TagModel::setdown();
 		\NewsModel::setdown();
 		\ProfileModel::setdown();
+		\StrictHasOneProfileModel::setdown();
+		\StrictHasOneAuthorModel::setdown();
 
 		// setup models
 		\AuthorModel::setup();
 		\TagModel::setup();
 		\NewsModel::setup();
 		\ProfileModel::setup();
+		\StrictHasOneAuthorModel::setup();
+		\StrictHasOneProfileModel::setup();
 
 		// setup Author
 		///////////////////////////////////
@@ -272,6 +301,137 @@ class Test_Relation {
 		$test->expect(
 			$author->profile->message == 'I\'m feeling lucky',
 			$type.': has-one: inverse relation'
+		);
+
+		// #24 has-one replacement and clearing
+		$replaceAuthor = new AuthorModel();
+		$replaceAuthor->name = 'Has-one Replacement';
+		$replaceAuthor->save();
+		$replaceAuthorId = $replaceAuthor->_id;
+
+		$oldProfile = new ProfileModel();
+		$oldProfile->message = 'Old has-one child';
+		$oldProfile->author = $replaceAuthor;
+		$oldProfile->save();
+		$oldProfileId = $oldProfile->_id;
+
+		$replaceAuthor->reset();
+		$replaceAuthor->load([$author_pk.' = ?', $replaceAuthorId]);
+		$test->expect(
+			$replaceAuthor->profile && $replaceAuthor->profile->message == 'Old has-one child',
+			$type.': #24 has-one replacement starts with the old child cached'
+		);
+
+		$newProfile = new ProfileModel();
+		$newProfile->message = 'New has-one child';
+		$newProfile->save();
+		$replaceAuthor->profile = $newProfile;
+		$test->expect(
+			$replaceAuthor->profile === $newProfile,
+			$type.': #24 has-one assignment immediately returns the new child'
+		);
+
+		$replaceAuthor->save();
+		$test->expect(
+			$replaceAuthor->profile === $newProfile,
+			$type.': #24 has-one replacement keeps the new child cached after save'
+		);
+
+		$freshAuthor = new AuthorModel();
+		$freshAuthor->load([$author_pk.' = ?', $replaceAuthorId]);
+		$linkedProfiles = (new ProfileModel())->find(['author = ?', $replaceAuthorId]);
+		$test->expect(
+			$freshAuthor->profile && $freshAuthor->profile->message == 'New has-one child'
+			&& $linkedProfiles && count($linkedProfiles) == 1,
+			$type.': #24 has-one replacement persists exactly one new child'
+		);
+
+		$detachedProfile = new ProfileModel();
+		$detachedProfile->load([$profile_pk.' = ?', $oldProfileId]);
+		$test->expect(
+			$detachedProfile->author === NULL,
+			$type.': #24 has-one replacement detaches the old child'
+		);
+
+		$freshAuthor->clear('profile');
+		$freshAuthor->save();
+		$freshAuthor->reset();
+		$freshAuthor->load([$author_pk.' = ?', $replaceAuthorId]);
+		$test->expect(
+			$freshAuthor->profile === NULL
+			&& (new ProfileModel())->count(['author = ?', $replaceAuthorId]) == 0,
+			$type.': #24 clearing an existing has-one detaches its child'
+		);
+
+		$emptyAuthor = new AuthorModel();
+		$emptyAuthor->name = 'Empty has-one';
+		$emptyAuthor->save();
+		$emptyAuthor->profile = NULL;
+		$emptyAuthor->save();
+		$emptyAuthor->clear('profile');
+		$emptyAuthor->save();
+		$test->expect(
+			$emptyAuthor->profile === NULL,
+			$type.': #24 assigning or clearing an absent has-one is safe'
+		);
+
+		$strictAuthor = new StrictHasOneAuthorModel();
+		$strictAuthor->name = 'Strict has-one';
+		$strictAuthor->save();
+		$strictAuthorId = $strictAuthor->_id;
+		$strictProfile = new StrictHasOneProfileModel();
+		$strictProfile->message = 'Required child';
+		$strictAuthor->profile = $strictProfile;
+		$strictAuthor->save();
+		$test->expect(
+			$strictAuthor->profile === $strictProfile,
+			$type.': #24 a non-nullable has-one allows its first child'
+		);
+
+		$strictAuthor->profile = $strictProfile;
+		$sameChildError = NULL;
+		try {
+			$strictAuthor->save();
+		} catch (\Throwable $e) {
+			$sameChildError = $e->getMessage();
+		}
+		$test->expect(
+			$sameChildError === NULL,
+			$type.': #24 a non-nullable has-one allows the same child to be saved again'
+		);
+
+		$replacementProfile = new StrictHasOneProfileModel();
+		$replacementProfile->message = 'Forbidden replacement';
+		$strictAuthor->profile = $replacementProfile;
+		$replacementError = NULL;
+		try {
+			$strictAuthor->save();
+		} catch (\Throwable $e) {
+			$replacementError = $e->getMessage();
+		}
+		$freshStrictAuthor = new StrictHasOneAuthorModel();
+		$freshStrictAuthor->load(['_id = ?', $strictAuthorId]);
+		$test->expect(
+			str_contains((string) $replacementError, 'not nullable')
+			&& $freshStrictAuthor->profile
+			&& $freshStrictAuthor->profile->message == 'Required child',
+			$type.': #24 replacing a non-nullable has-one throws and preserves the old child'
+		);
+
+		$freshStrictAuthor->profile = NULL;
+		$clearError = NULL;
+		try {
+			$freshStrictAuthor->save();
+		} catch (\Throwable $e) {
+			$clearError = $e->getMessage();
+		}
+		$preservedStrictAuthor = new StrictHasOneAuthorModel();
+		$preservedStrictAuthor->load(['_id = ?', $strictAuthorId]);
+		$test->expect(
+			str_contains((string) $clearError, 'not nullable')
+			&& $preservedStrictAuthor->profile
+			&& $preservedStrictAuthor->profile->message == 'Required child',
+			$type.': #24 clearing a non-nullable has-one throws and preserves its child'
 		);
 
 

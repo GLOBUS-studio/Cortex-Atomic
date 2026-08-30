@@ -98,6 +98,7 @@ class Cortex extends Cursor {
 		E_UNKNOWN_FIELD = 'Field %s does not exist in %s.',
 		E_INVALID_RELATION_OBJECT = 'You can only save hydrated mapper objects',
 		E_NULLABLE_COLLISION = 'Unable to set NULL to the NOT NULLABLE field: %s',
+		E_HAS_ONE_NOT_NULLABLE = 'Cannot replace or clear has-one relation "%s": existing child field "%s" is not nullable. Delete or reassign the existing child first.',
 		E_WRONG_RELATION_CLASS = 'Relations only works with Cortex objects',
 		E_MM_REL_VALUE = 'Invalid value for many field "%s". Expecting null, split-able string, hydrated mapper object, or array of mapper objects.',
 		E_MM_REL_CLASS = 'Mismatching m:m relation config from class `%s` to `%s`.',
