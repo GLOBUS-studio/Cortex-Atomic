@@ -57,8 +57,8 @@ class Cortex extends Cursor {
 		$saveCsd,       // mm rel save cascade
 		$collection,    // collection
 		$trigger = [],  // custom field event handlers
-		$relFilter,     // relation filters configured for the next find() or load()
-		$lazyRelFilter, // relation filters handed over to deferred relation loading
+		$relFilter,     // next-query relation filters
+		$lazyRelFilter, // deferred relation filters
 		$hasCond,       // IDs of records the next find should have
 		$whitelist,     // restrict to these fields
 		$relWhitelist,  // restrict relations to these fields
@@ -256,8 +256,7 @@ class Cortex extends Cursor {
 		$this->saveCsd = [];
 		$this->collection = null;
 		$this->hasCond = null;
-		// query state belongs to the model that configured it. A copy must not
-		// inherit relation filters of either lifecycle phase.
+		// Clones must not inherit relation-filter state.
 		$this->relFilter = [];
 		$this->lazyRelFilter = [];
 		$this->countFields = [];

@@ -377,6 +377,8 @@ trait FieldAccessTrait {
 		}
 		if (!empty($fields) && isset($fields[$key]) && is_array($fields[$key])
 			&& !array_key_exists($key,$this->fieldsCache)) {
+			$isRelation = isset($fields[$key]['relType']);
+			try {
 			// load relations
 			if (isset($fields[$key]['belongs-to-one'])) {
 				// one-to-X, bidirectional, direct way
@@ -610,6 +612,12 @@ trait FieldAccessTrait {
 					else
 						$this->fieldsCache[$key] = (bool) $this->mapper->{$key};
 				}
+			}
+			}
+			finally {
+				// Consume the resolved relation's deferred filter.
+				if ($isRelation)
+					$this->consumeLazyRelFilter($key);
 			}
 		}
 		// fetch cached value, if existing

@@ -298,6 +298,9 @@ trait RelationTrait {
 	 * @return $this
 	 */
 	public function filter($key, $filter=null, $option=null) {
+		// A new filter chain invalidates previous deferred filters.
+		if (empty($this->relFilter))
+			$this->lazyRelFilter = [];
 		if (str_contains($key,'.')) {
 			list($key,$fkey) = explode('.',$key,2);
 			if (!isset($this->relFilter[$key.'.']))
@@ -310,8 +313,7 @@ trait RelationTrait {
 
 	/**
 	 * removes one or all relation filter
-	 * The pending set of the deferred relation loading is cleared as well, so a
-	 * later relation access cannot revive a filter the caller just removed.
+	 * Also clears deferred relation filters.
 	 * @param null|string $key
 	 */
 	public function clearFilter($key = null) {
@@ -325,10 +327,7 @@ trait RelationTrait {
 	}
 
 	/**
-	 * hand the configured relation filters over to the deferred relation loading
-	 * The filters describe the record that was just loaded. They must not take
-	 * part in the next query of this model, but a later relation access on that
-	 * record must still apply them.
+	 * transfers query filters to deferred relation loading
 	 * @param array|null $filters filters to hand over, defaults to the own set
 	 */
 	protected function deferRelFilter($filters = null) {
@@ -356,6 +355,14 @@ trait RelationTrait {
 	protected function getLazyRelFilterOption($key) {
 		return !empty($this->lazyRelFilter[$key][1])
 			? $this->lazyRelFilter[$key][1] : null;
+	}
+
+	/**
+	 * consumes deferred filters for one resolved relation
+	 * @param string $key
+	 */
+	protected function consumeLazyRelFilter($key) {
+		unset($this->lazyRelFilter[$key], $this->lazyRelFilter[$key.'.']);
 	}
 
 	/**

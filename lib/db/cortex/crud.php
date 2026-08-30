@@ -148,6 +148,7 @@ trait CrudTrait {
 				}, $options['order']);
 		}
 		$hasJoin = [];
+		$resolvedEmpty = false;
 		if ($this->hasCond) {
 			// Clear has() conditions after every query attempt.
 			$hasConditions = $this->hasCond;
@@ -260,9 +261,29 @@ trait CrudTrait {
 						default:
 							throw new \Exception(self::E_HAS_COND);
 					}
-					if (isset($result) && !isset($addToFilter))
-						return $count ? 0 : false;
+					if (isset($result) && !isset($addToFilter)) {
+						// SQL can also carry predicates in JOIN clauses, outside
+						// $filter. Preserve its established early-return behavior;
+						// the empty-set regression is in the schemaless fallback.
+						if ($this->dbsType == 'sql')
+							return $count ? 0 : false;
+						// Preserve boolean identity: X OR false is X. Keep an
+						// unresolved false accumulator so a later OR condition can
+						// still replace it, while a later AND remains false.
+						if ($isOrCondition && !$resolvedEmpty
+							&& $filter && !empty($filter[0]))
+							continue;
+						$resolvedEmpty = true;
+						continue;
+					}
 					elseif (isset($addToFilter)) {
+						if ($resolvedEmpty) {
+							if (!$isOrCondition)
+								continue;
+							// false OR X is X; discard the earlier expression.
+							$filter = null;
+							$resolvedEmpty = false;
+						}
 						if (!$filter)
 							$filter = [''];
 						if (!empty($filter[0]))
@@ -278,6 +299,8 @@ trait CrudTrait {
 				$this->hasCond = null;
 			}
 		}
+		if ($resolvedEmpty)
+			return $count ? 0 : false;
 		$filter = $this->queryParser->prepareFilter($filter, $this->dbsType, $this->db, $this->fieldConf, $this->primary);
 		if ($this->dbsType=='sql') {
 			$qtable = $this->db->quotekey($this->table);

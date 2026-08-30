@@ -27,6 +27,28 @@ class StrictHasOneProfileModel extends \DB\Cortex {
 		$db = 'DB';
 }
 
+class MongoTextRelationTargetModel extends \DB\Cortex {
+	protected
+		$fieldConf = [
+			'code' => ['type' => \DB\SQL\Schema::DT_VARCHAR128],
+			'label' => ['type' => \DB\SQL\Schema::DT_VARCHAR128],
+		],
+		$table = 'mongo_text_relation_target',
+		$db = 'DB';
+}
+
+class MongoTextRelationOwnerModel extends \DB\Cortex {
+	protected
+		$fieldConf = [
+			'label' => ['type' => \DB\SQL\Schema::DT_VARCHAR128],
+			'target' => [
+				'belongs-to-one' => ['\\MongoTextRelationTargetModel', 'code'],
+			],
+		],
+		$table = 'mongo_text_relation_owner',
+		$db = 'DB';
+}
+
 class Test_Relation {
 
 	/**
@@ -66,6 +88,10 @@ class Test_Relation {
 		\ProfileModel::setdown();
 		\StrictHasOneProfileModel::setdown();
 		\StrictHasOneAuthorModel::setdown();
+		if ($type == 'mongo') {
+			\MongoTextRelationOwnerModel::setdown();
+			\MongoTextRelationTargetModel::setdown();
+		}
 
 		// setup models
 		\AuthorModel::setup();
@@ -74,6 +100,10 @@ class Test_Relation {
 		\ProfileModel::setup();
 		\StrictHasOneAuthorModel::setup();
 		\StrictHasOneProfileModel::setup();
+		if ($type == 'mongo') {
+			\MongoTextRelationTargetModel::setup();
+			\MongoTextRelationOwnerModel::setup();
+		}
 
 		// setup Author
 		///////////////////////////////////
@@ -687,6 +717,53 @@ class Test_Relation {
 			(new ProfileModel())->find(['message = ?', 'relation-erase-batch']) === false,
 			$type.': #20 erase(filter) deletes a relation match on a model without m:m relations'
 		);
+
+		// #42: relation metadata must not coerce an explicit text target key
+		// into an ObjectId while preparing a Mongo erase filter.
+		if ($type == 'mongo') {
+			$textTarget = new MongoTextRelationTargetModel();
+			$textTarget->code = 'tag-alpha';
+			$textTarget->label = 'Alpha';
+			$textTarget->save();
+
+			$textOwner = new MongoTextRelationOwnerModel();
+			$textOwner->label = 'text-key-delete';
+			$textOwner->target = $textTarget;
+			$textOwner->save();
+			$textEraseError = null;
+			try {
+				(new MongoTextRelationOwnerModel())->erase(['target = ?', 'tag-alpha']);
+			} catch (\Throwable $e) {
+				$textEraseError = $e->getMessage();
+			}
+			$test->expect(
+				$textEraseError === null
+					&& (new MongoTextRelationOwnerModel())->count(
+						['label = ?', 'text-key-delete']) === 0,
+				$type.': #42 erase(filter) preserves explicit text relation keys'
+			);
+		} else
+			$test->expect(true, $type.': #42 Mongo text relation erase skip');
+
+		// #43: an empty OR relation predicate is the boolean identity and must
+		// not cancel the ordinary filter already present.
+		$orBaseTag = new TagModel();
+		$orBaseTag->title = 'OR identity present tag';
+		$orBaseTag->save();
+		$orBaseNews = new NewsModel();
+		$orBaseNews->title = 'OR identity base row';
+		$orBaseNews->tags = [$orBaseTag];
+		$orBaseNews->save();
+		$orEmpty = new NewsModel();
+		$orEmpty->orHas('tags', ['title = ?', 'OR identity missing tag']);
+		$orEmptyResult = $orEmpty->find(['title = ?', 'OR identity base row']);
+		$test->expect(
+			$orEmptyResult && count($orEmptyResult) === 1
+				&& $orEmptyResult[0]->title === 'OR identity base row',
+			$type.': #43 empty belongs-to-many orHas() preserves the base filter'
+		);
+		(new NewsModel())->erase(['title = ?', 'OR identity base row']);
+		(new TagModel())->erase(['title = ?', 'OR identity present tag']);
 
 		$eraseAuthor = new AuthorModel();
 		$eraseAuthor->name = 'Relation erase m:m';

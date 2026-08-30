@@ -194,8 +194,7 @@ trait CastTrait {
 			$cx = clone($this);
 			$cx->reset(false);
 			$cx->mapper = $mapper;
-			// the result model inherits the relation filters of the query that
-			// produced it, but only for its own deferred relation access
+			// Preserve filters only for deferred access on this result.
 			$cx->deferRelFilter($this->relFilter);
 		}
 		$cx->emit('load');
@@ -302,7 +301,7 @@ trait CastTrait {
 			$this->countFields=[];
 			$this->preBinds=[];
 			$this->grp_stack=null;
-			// relation filters of both lifecycle phases are query state too
+			// Clear relation-filter state.
 			$this->relFilter=[];
 			$this->lazyRelFilter=[];
 		}

@@ -283,9 +283,13 @@ REGEX;
 		foreach ($parts as &$part) {
 			if (preg_match('/\s*\b(AND|OR)\b\s*/i',$part))
 				continue;
-			if (preg_match('/;|--|\/\*|\*\//', $part, $invalid))
+			// Validation applies to executable filter syntax, not quoted data.
+			// Mask literals so safe punctuation such as "value;part" is not
+			// mistaken for an injected statement or comment.
+			$syntax = preg_replace('~'.$this->quotedLiteralPattern().'~','', $part);
+			if (preg_match('/;|--|\/\*|\*\//', $syntax, $invalid))
 				throw new \Exception(sprintf(self::E_INVALID_FIELD_NAME, trim($part)));
-			if (preg_match('/\b[a-z_][\w-]*(?:\s*\.|\s*\()/i', $part, $invalid))
+			if (preg_match('/\b[a-z_][\w-]*(?:\s*\.|\s*\()/i', $syntax, $invalid))
 				throw new \Exception(sprintf(self::E_INVALID_FIELD_NAME, trim($invalid[0])));
 			// prefix field names
 			$part = preg_replace_callback('/([a-z_][\w-]*)(?=[\s<>=!)]|$)/i',
@@ -460,7 +464,7 @@ REGEX;
 				return ['$where' => 'this.'.$key.' '.$operator.' this.'.trim($exp[1])];
 			$upart = preg_replace('/\s+/', ' ', strtoupper(trim($operator)));
 			// MongoID shorthand
-			if ($key == '_id' || (isset($fieldConf[$key]) && isset($fieldConf[$key]['relType']))) {
+			if ($this->mongoFieldUsesObjectId($key,$fieldConf)) {
 				if (is_null($var)) {
 					// leave null for null comparisons
 				} elseif (is_array($var))
@@ -499,6 +503,28 @@ REGEX;
 			return [$key => $var];
 		}
 		return $part;
+	}
+
+	/**
+	 * Check whether a Mongo field stores ObjectId values.
+	 *
+	 * Relations that point at an explicit text key store that text verbatim;
+	 * only the model id and relations targeting `_id` should be converted.
+	 *
+	 * @param string $key
+	 * @param array|null $fieldConf
+	 * @return bool
+	 */
+	protected function mongoFieldUsesObjectId($key,$fieldConf) {
+		if ($key === '_id')
+			return true;
+		if (!isset($fieldConf[$key]['relType']))
+			return false;
+		$relType = $fieldConf[$key]['relType'];
+		if (!in_array($relType,['belongs-to-one','belongs-to-many'],true))
+			return false;
+		$relConf = $fieldConf[$key][$relType] ?? null;
+		return !is_array($relConf) || ($relConf[1] ?? '_id') === '_id';
 	}
 
 	/**

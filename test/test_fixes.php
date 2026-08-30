@@ -323,8 +323,26 @@ class Test_Fixes {
 						fn($name) => $name !== 'Alice')) === 0,
                 $type.': #20 Jig: quoted literal is converted to a safe bind'
             );
+
+			$punctuated20 = new \AuthorModel();
+			$punctuated20->name = 'Safe;Literal';
+			$punctuated20->mail = 'safe-literal@example.test';
+			$punctuated20->save();
+			$punctuatedLiteral20 = null;
+			$punctuatedError20 = null;
+			try {
+				$punctuatedLiteral20 = (new \AuthorModel())
+					->find(["name = 'Safe;Literal'"]);
+			} catch (\Throwable $e) {
+				$punctuatedError20 = $e->getMessage();
+			}
+			$test->expect(
+				$punctuatedError20 === null && $punctuatedLiteral20
+					&& $punctuatedLiteral20->getAll('name', true) === ['Safe;Literal'],
+				$type.': #44 Jig validation ignores punctuation inside quoted literals'
+			);
         } else {
-            for ($i = 0; $i < 5; $i++)
+            for ($i = 0; $i < 6; $i++)
                 $test->expect(true, $type.': #20 Jig validation skip (non-Jig DB)');
         }
 
