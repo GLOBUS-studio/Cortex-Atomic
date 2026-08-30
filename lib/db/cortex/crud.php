@@ -150,6 +150,7 @@ trait CrudTrait {
 		if ($this->hasCond) {
 			foreach($this->hasCond as $key => $hasCond) {
 				$addToFilter = null;
+				$result = null;
 				if ($deep = str_contains($key,'.')) {
 					$key = rtrim($key,'.');
 					$hasCond = [null,null];

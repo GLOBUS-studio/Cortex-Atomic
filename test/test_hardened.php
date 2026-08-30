@@ -108,6 +108,29 @@ class Test_Hardened {
 		$tags = $data['tags'];
 		$news = $data['news'];
 
+		// Multiple has() conditions must not depend on relation order.
+		if (str_contains($type, 'sql')) {
+			$multiHas = new \AuthorModel();
+			$multiHasResult = $multiHas
+				->has('news', ['title = ?', 'First Post'])
+				->has('friends', ['name = ?', 'Charlie'])
+				->find();
+			$test->expect(
+				$multiHasResult && count($multiHasResult) === 1
+					&& $multiHasResult[0]->name === 'Alice',
+				$type.': chained subquery and m:m JOIN has() conditions are order-independent'
+			);
+
+			$multiHasCount = (new \AuthorModel())
+				->has('profile', ['message = ?', 'Bio of Alice'])
+				->has('friends', ['name = ?', 'Charlie'])
+				->count();
+			$test->expect(
+				$multiHasCount === 1,
+				$type.': count() agrees with chained has() conditions'
+			);
+		}
+
 		// ================================================================
 		//  1. findByRawSQL - basic
 		// ================================================================
