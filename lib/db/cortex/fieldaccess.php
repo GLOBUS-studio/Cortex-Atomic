@@ -661,8 +661,15 @@ trait FieldAccessTrait {
 	 */
 	function clear($key) {
 		unset($this->fieldsCache[$key]);
-		if (isset($this->fieldConf[$key]['relType']))
+		if (isset($this->fieldConf[$key]['relType'])) {
 			$this->set($key,null);
+			return $this->mapper->clear($key);
+		}
+		if ($this->dbsType == 'sql') {
+			$mappedKey = $key == '_id' ? $this->primary : $key;
+			if (array_key_exists($mappedKey,$this->mapper->schema()))
+				return $this->set($key,null);
+		}
 		$this->mapper->clear($key);
 	}
 

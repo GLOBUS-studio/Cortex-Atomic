@@ -14,7 +14,7 @@ class Test_Coverage {
 		$tname = 'test_coverage';
 		\DB\Cortex::setdown($db, $tname);
 		$fields = [
-			'title'    => ['type' => \DB\SQL\Schema::DT_VARCHAR256],
+			'title'    => ['type' => \DB\SQL\Schema::DT_VARCHAR256, 'nullable' => true],
 			'amount'   => ['type' => \DB\SQL\Schema::DT_INT4],
 			'active'   => ['type' => \DB\SQL\Schema::DT_BOOLEAN, 'nullable' => true],
 			'data'     => ['type' => \DB\Cortex::DT_JSON],
@@ -150,17 +150,35 @@ class Test_Coverage {
 		);
 
 		// ========================================================================
-		// 10. clear() - clear a specific field (clears internal cache)
+		// 10. clear() - clear a mapped field in memory and storage
 		// ========================================================================
 		$cx->reset();
 		$cx->title = 'clear_test';
 		$cx->amount = 99;
 		$cx->save();
-		// clear() should run without error and clear internal fieldsCache
-		$cx->clear('amount');
+		$clearId = $cx->_id;
+		$cx->clear('title');
 		$test->expect(
-			true,
-			$type.': clear() executes without error'
+			$cx->get('title') === null || $cx->get('title') === '',
+			$type.': clear() empties a mapped field in memory'
+		);
+		if (str_contains($type, 'sql'))
+			$test->expect(
+				$cx->cleared('title') === 'clear_test',
+				$type.': cleared() returns the mapped field initial value'
+			);
+		$cx->save();
+		$cx->reset();
+		$cx->load(['_id = ?', $clearId]);
+		$test->expect(
+			$cx->get('title') === null || $cx->get('title') === '',
+			$type.': clear() persists the empty mapped field'
+		);
+		$cx->set('transient_clear_test', 123);
+		$cx->clear('transient_clear_test');
+		$test->expect(
+			!$cx->exists('transient_clear_test'),
+			$type.': clear() still removes an ad-hoc field'
 		);
 
 		// ========================================================================
