@@ -40,6 +40,7 @@ class CortexQueryParser extends \Prefab {
 		$cacheHash = $f3->hash($f3->stringify($cond)).'.'.$engine;
 		if ($engine=='sql')
 			$cacheHash.='-'.$db->driver();
+		$cacheHash.='-'.$f3->hash($f3->stringify([$fieldConf,$primary]));
 		if (isset($this->queryCache[$cacheHash]))
 			// load from memory
 			return $this->queryCache[$cacheHash];
@@ -295,7 +296,7 @@ REGEX;
 				// find like operator
 				if (str_contains($upart = strtoupper($part), ' @LIKE ')) {
 					$not = str_contains($upart, '@NOT');
-					$val = '/'.$this->_likeValueToRegEx($val).'/iu';
+					$val = '/'.$this->sqlLikeToRegex($val).'/iu';
 					$part = ($not ? '!' : '').'preg_match(?,'.$match[0].')';
 				} // find IN operator
 				elseif (($pos = strpos($upart, ' @IN ')) !== false) {
@@ -470,7 +471,7 @@ REGEX;
 			}
 			// find LIKE operator
 			if (in_array($upart, ['LIKE','NOT LIKE'])) {
-				$rgx = $this->_likeValueToRegEx($var);
+				$rgx = $this->sqlLikeToRegex($var);
 				$var = $db->legacy() ? new \MongoRegex('/'.$rgx.'/iu') : new \MongoDB\BSON\Regex($rgx,'iu');
 				if ($upart == 'NOT LIKE')
 					$var = ['$not' => $var];
@@ -516,18 +517,25 @@ REGEX;
 	 * @param string $var
 	 * @return string
 	 */
-	protected function _likeValueToRegEx($var) {
-		$lC = substr($var, -1, 1);
-		// %var% -> /var/
-		if ($var[0] == '%' && $lC == '%')
-			$var = substr($var, 1, -1);
-		// var%  -> /^var/
-		elseif ($lC == '%')
-			$var = '^'.substr($var, 0, -1);
-		// %var  -> /var$/
-		elseif ($var[0] == '%')
-			$var = substr($var, 1).'$';
-		return $var;
+	protected function sqlLikeToRegex($var) {
+		$var = (string)$var;
+		$regex = '^';
+		$literal = '';
+		$length = strlen($var);
+		for ($i = 0; $i < $length; $i++) {
+			$char = $var[$i];
+			if ($char === '\\' && $i + 1 < $length) {
+				$literal .= $var[++$i];
+				continue;
+			}
+			if ($char === '%' || $char === '_') {
+				$regex .= preg_quote($literal,'/').($char === '%' ? '.*' : '.');
+				$literal = '';
+			}
+			else
+				$literal .= $char;
+		}
+		return $regex.preg_quote($literal,'/').'$';
 	}
 
 	/**

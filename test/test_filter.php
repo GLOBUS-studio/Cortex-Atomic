@@ -364,6 +364,70 @@ class Test_Filter {
 			substr($news->created_at,0,strlen($time)) == $time,
 			$type.': update datetime field'
 		);
+
+		// Query-parser cache must include model-specific configuration.
+		$parser = \DB\Cortex\CortexQueryParser::instance();
+		$parserRef = new \ReflectionObject($parser);
+		$parserCache = $parserRef->getProperty('queryCache');
+		$parserCache->setAccessible(true);
+		$parserCache->setValue($parser, []);
+		if (str_contains($type, 'sql')) {
+			$parser->prepareFilter(['_id = ?', 1], 'sql', $db, null, 'id');
+			$customPrimary = $parser->prepareFilter(
+				['_id = ?', 1], 'sql', $db, null, 'pk_custom');
+			$test->expect(
+				str_contains($customPrimary[0], 'pk_custom'),
+				$type.': parser cache isolates models with different primary keys'
+			);
+		}
+		elseif ($type === 'mongo') {
+			$objectId = '507f1f77bcf86cd799439011';
+			$plain = $parser->prepareFilter(['cache_key = ?', $objectId],
+				'mongo', $db, null);
+			$relation = $parser->prepareFilter(['cache_key = ?', $objectId],
+				'mongo', $db, ['cache_key'=>['relType'=>'belongs-to-one']]);
+			$test->expect(
+				is_string($plain['cache_key'])
+					&& $relation['cache_key'] instanceof \MongoDB\BSON\ObjectId,
+				$type.': parser cache isolates models with different field configuration'
+			);
+		}
+		else
+			$test->expect(true, $type.': parser model-configuration cache test not applicable');
+
+		// Jig and Mongo must reproduce SQL LIKE semantics with safe regexes.
+		foreach (['like.a.c','likeaxc','likeabc','likea_c','likeabbbc','likea/b'] as $name) {
+			$row = new \AuthorModel();
+			$row->name = $name;
+			$row->save();
+		}
+		$literalDot = (new \AuthorModel())->find(['name LIKE ?', '%like.a.c%']);
+		$singleWildcard = (new \AuthorModel())->find(['name LIKE ?', 'likea_c']);
+		$middleWildcard = (new \AuthorModel())->find(['name LIKE ?', 'likea%c']);
+		$slash = (new \AuthorModel())->find(['name LIKE ?', '%likea/b%']);
+		$empty = (new \AuthorModel())->find(['name LIKE ?', '']);
+		$test->expect(
+			$literalDot && count($literalDot) === 1
+				&& $literalDot[0]->name === 'like.a.c',
+			$type.': LIKE treats regex metacharacters as literal text'
+		);
+		$test->expect(
+			$singleWildcard && in_array('likeabc', $singleWildcard->getAll('name'))
+				&& in_array('likea_c', $singleWildcard->getAll('name')),
+			$type.': LIKE underscore matches exactly one character'
+		);
+		$test->expect(
+			$middleWildcard && in_array('likeabbbc', $middleWildcard->getAll('name')),
+			$type.': LIKE percent wildcard works in the middle'
+		);
+		$test->expect(
+			$slash && count($slash) === 1 && $slash[0]->name === 'likea/b',
+			$type.': LIKE safely handles regex delimiters'
+		);
+		$test->expect(
+			$empty === false || count($empty) === 0,
+			$type.': LIKE safely handles an empty pattern'
+		);
 		///////////////////////////////////
 		return $test->results();
 	}
