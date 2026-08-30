@@ -182,6 +182,8 @@ class CortexCollection extends \ArrayIterator {
 			}
 			return 0;
 		});
+		// uasort preserves keys; positional access requires 0..n-1.
+		$this->setData(array_values($this->getArrayCopy()));
 	}
 
 	/**
@@ -190,19 +192,20 @@ class CortexCollection extends \ArrayIterator {
 	 * @param null $limit
 	 */
 	public function slice($offset, $limit=null) {
+		$this->setData(array_slice($this->getArrayCopy(),
+			$offset, $limit ?? NULL, false));
+	}
+
+	/**
+	 * replace the whole content, keyed sequentially from 0
+	 * @param array $data
+	 */
+	protected function setData(array $data) {
+		foreach (array_keys($this->getArrayCopy()) as $key)
+			$this->offsetUnset($key);
+		foreach (array_values($data) as $i => $model)
+			parent::offsetSet($i,$model);
 		$this->rewind();
-		$i=0;
-		$del=[];
-		while ($this->valid()) {
-			if ($i < $offset)
-				$del[]=$this->key();
-			elseif ($i >= $offset && $limit && $i >= ($offset+$limit))
-				$del[]=$this->key();
-			$i++;
-			$this->next();
-		}
-		foreach ($del as $ii)
-			unset($this[$ii]);
 	}
 
 	/**

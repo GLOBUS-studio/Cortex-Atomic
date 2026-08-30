@@ -456,7 +456,6 @@ class Test_Coverage_Extra {
 		$all = $cx->find(null, ['order' => 'title ASC']);
 		if ($all && count($all) > 1) {
 			$all->orderBy('title DESC');
-			// orderBy uses uasort, so keys are reordered but not re-indexed
 			$items = [];
 			foreach ($all as $item) $items[] = $item->title;
 			$test->expect(

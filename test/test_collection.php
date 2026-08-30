@@ -84,13 +84,78 @@ class Test_Collection {
 			$titles == $sorted,
 			$type.': CortexCollection::orderBy() sorts correctly'
 		);
+		$test->expect(
+			array_keys($allNews->expose()) === range(0, count($allNews) - 1)
+				&& isset($allNews[0]) && $allNews[0]->title === $titles[0],
+			$type.': #26 orderBy() keeps positional keys aligned with iteration'
+		);
 
 		// slice
 		$allNews2 = $news->find(null, ['order' => 'title ASC']);
+		$expectedSliceTitle = $allNews2[1]->title;
 		$allNews2->slice(1, 1);
 		$test->expect(
 			count($allNews2) == 1,
 			$type.': CortexCollection::slice() limits collection'
+		);
+		$test->expect(
+			array_keys($allNews2->expose()) === [0]
+				&& isset($allNews2[0]) && $allNews2[0]->title === $expectedSliceTitle,
+			$type.': #26 slice() reindexes the retained records from zero'
+		);
+
+		$fixtureTagIds = [];
+		for ($i = 1; $i <= 3; $i++) {
+			$fixtureTag = new \TagModel();
+			$fixtureTag->title = 'issue26-tag-'.$i;
+			$fixtureTag->save();
+			$fixtureTagIds[] = $fixtureTag->_id;
+		}
+		$fixtureTitles = [];
+		foreach ([1, 3, 2, 0] as $i => $tagCount) {
+			$fixtureNews = new \NewsModel();
+			$fixtureNews->title = 'issue26-news-'.($i + 1);
+			if ($tagCount)
+				$fixtureNews->tags2 = array_slice($fixtureTagIds, 0, $tagCount);
+			$fixtureNews->save();
+			$fixtureTitles[] = $fixtureNews->title;
+		}
+		$fixtureFilter = ['title IN ?', $fixtureTitles];
+
+		$counterNews = new \NewsModel();
+		$counterNews->countRel('tags2');
+		$counterResult = $counterNews->find(
+			$fixtureFilter, ['order' => 'count_tags2 DESC']);
+		$counterTitles = [];
+		foreach ($counterResult ?: [] as $item)
+			$counterTitles[] = $item->title;
+		$test->expect(
+			$counterTitles === [
+				'issue26-news-2', 'issue26-news-3',
+				'issue26-news-1', 'issue26-news-4'
+			] && isset($counterResult[0])
+				&& $counterResult[0]->title === $counterTitles[0],
+			$type.': #26 counter-sorted find() aligns index 0 with iteration'
+		);
+
+		$pageNews = new \NewsModel();
+		$pageNews->countRel('tags2');
+		$counterPage = $pageNews->paginate(
+			0, 2, $fixtureFilter, ['order' => 'count_tags2 DESC']);
+		$test->expect(
+			$counterPage['subset'] instanceof \DB\CortexCollection
+				&& array_keys($counterPage['subset']->expose()) === [0, 1],
+			$type.': #26 counter-sorted pagination exposes sequential positions'
+		);
+
+		$oneNews = new \NewsModel();
+		$oneNews->countRel('tags2');
+		$counterFirst = $oneNews->findone(
+			$fixtureFilter, ['order' => 'count_tags2 DESC']);
+		$test->expect(
+			$counterFirst instanceof \NewsModel
+				&& $counterFirst->title === 'issue26-news-2',
+			$type.': #26 findone() returns the first counter-sorted record'
 		);
 
 		// ========================================================================
