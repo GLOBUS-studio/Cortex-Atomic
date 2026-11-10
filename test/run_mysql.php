@@ -127,6 +127,13 @@ foreach ($dbs as $type => $db) {
     $results = array_merge($results, (array)$test->run($db, $type));
 }
 
+// Test ColumnType (live type read-back per engine)
+foreach ($dbs as $type => $db) {
+    $f3->set('DB', $db);
+    $test = new \Test_ColumnType();
+    $results = array_merge($results, (array)$test->run($db, $type));
+}
+
 // Test Nullability/FK (belongs-to-one nullability + ON DELETE behavior)
 foreach ($dbs as $type => $db) {
     $f3->set('DB', $db);

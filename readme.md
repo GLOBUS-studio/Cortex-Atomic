@@ -2,7 +2,7 @@
 
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 [![PHP](https://img.shields.io/badge/PHP-%3E%3D8.0-777BB4.svg)](https://www.php.net/)
-[![Tests](https://img.shields.io/badge/tests-781%20passed-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-808%20passed-brightgreen)]()
 
 **A multi-engine ORM / ODM for [Atomic Framework](https://github.com/MADEVAL/Atomic-Framework)**
 Developed and maintained by [GLOBUS.studio](https://github.com/GLOBUS-studio/Cortex-Atomic).
@@ -10,7 +10,7 @@ Based on [Cortex](https://github.com/ikkez/F3-Sugar/tree/master/Cortex) by Chris
 
 > PHP 8.0 - 8.5 | Stable: SQLite, MySQL, MariaDB, PostgreSQL, MongoDB, Jig
 > Preview: SQL Server
-> 781 tests | GPLv3
+> 808 tests | GPLv3
 
 ### A multi-engine ORM / ODM - Cortex-Atomic
 
@@ -31,7 +31,7 @@ Cortex is a multi-engine ActiveRecord ORM / ODM that offers easy object persiste
 #### Changes from the original Cortex
 
   - **PHP 8.0+** - minimum requirement, uses `str_contains()`, removed deprecated `setAccessible()` calls
-  - **PHP 8.5 compatible** - covered by the current 781-test suite
+  - **PHP 8.5 compatible** - covered by the current 808-test suite
   - **Trait-based architecture** - Cortex class decomposed into 5 focused traits:
     - `SchemaBuilderTrait` - table setup/setdown, schema resolution, defaults
     - `CastTrait` - casting mappers to arrays, field type serialization
@@ -44,7 +44,8 @@ Cortex is a multi-engine ActiveRecord ORM / ODM that offers easy object persiste
     - Pivot table creation with UNIQUE indexes and FK constraints
     - Schema compatibility paths for multiple SQL drivers; see the support status below
     - Backward-compatible `\DB\SQL\Schema` alias via `class_alias`
-  - **781 tests** - cross-engine coverage for the public API, relations, schema behavior, edge cases and confirmed regressions
+    - `ColumnType` describes live columns as DT_* tokens with their real limits (length, bytes, integer width, precision/scale, fractional seconds, enum values)
+  - **808 tests** - cross-engine coverage for the public API, relations, schema behavior, edge cases and confirmed regressions
   - **Atomic Framework** - prepared for integration into the [Atomic ecosystem](https://github.com/MADEVAL/Atomic-Framework)
   - **Fat-Free Framework** - fully compatible with F3 3.9.x as standalone ORM
 
@@ -56,12 +57,12 @@ currently release-certified and should not be treated as production-stable.
 
 | Engine | Status | Latest verification |
 | --- | --- | --- |
-| SQLite | Stable | 781/781 tests passing |
-| MySQL 26.10 | Stable | 812/812 tests passing |
-| MariaDB 12.0.2 | Stable | 812/812 tests passing |
+| SQLite | Stable | 808/808 tests passing |
+| MySQL 26.10 | Stable | 865/865 tests passing |
+| MariaDB 12.0.2 | Stable | 866/866 tests passing |
 | MongoDB | Stable | 362/362 applicable tests passing |
-| PostgreSQL 18.6 | Stable | 805/805 tests passing |
-| SQL Server | Preview / non-stable | 136/148 tests passing; 12 integration failures remain |
+| PostgreSQL 18.6 | Stable | 855/855 tests passing |
+| SQL Server | Preview / non-stable | 189/201 tests passing; 12 integration failures remain |
 | Jig | Stable | 337/367 tests passing in the combined runner; 30 remaining failures are primarily shared-fixture count mismatches |
 | IBM DB2, ODBC, Sybase/dblib | Future ports | Schema compatibility branches exist, but there is no maintained end-to-end runner or release certification yet |
 
@@ -2133,9 +2134,10 @@ Tests run against SQLite (no external DB server required). The suite covers:
 - **Transactions and constraints** - commit/rollback behavior, nesting, foreign keys and pivot uniqueness
 - **Schema and nullability** - table changes, type resolution, ON DELETE behavior and nullable validation
 - **Eager loading and edge cases** - fluent `with()`, dot notation, NULLs, empty values and orphan records
+- **Column types** - live column types and limits read back from each engine and compared with its catalog
 - **Regression fixes** - permanent coverage for each confirmed issue fixed in the 2.0.x history
 
-**781 tests total.**
+**808 tests total.**
 
 ### File structure
 

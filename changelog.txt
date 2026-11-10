@@ -3,7 +3,30 @@ https://github.com/GLOBUS-studio/Cortex-Atomic
 Part of Atomic Framework: https://github.com/MADEVAL/Atomic-Framework
 Based on Cortex by ikkez (Christian Knuth) for Fat-Free Framework.
 
-2.0.30 (10.11.2026)
+2.0.31 (10.11.2026)
+
+  [Features]
+- added DB\Cortex\Schema\ColumnType: maps live column types to DT_* tokens with their
+  real limits (length, bytes, integer width, precision/scale, fractional seconds, enums)
+- added ColumnType::withDeclaredTypes(): restores the lengths and precision that
+  \DB\SQL::schema() drops on PostgreSQL and SQL Server (it reads only DATA_TYPE);
+  bare table names resolve like the engine does, and ambiguous ones throw
+- added ColumnType::describeTable(): restores declared types and describes every column
+- ColumnType never guesses: unknown drivers, types the engine does not have, and types
+  whose length, precision or fractional seconds are missing (unrestored PostgreSQL and
+  SQL Server types, unconstrained NUMERIC, PostgreSQL MONEY, MySQL REAL, unknown SQLite
+  names) throw; withDeclaredTypes() throws for columns missing from the catalog
+- MariaDB JSON columns (LONGTEXT with a json_valid() check) read back as JSON
+- SQLite DATETIME/TIMESTAMP report no fractional precision, since SQLite does not limit it
+
+  [Test Suite]
+- added Test_ColumnType to the SQLite, MySQL, PostgreSQL and SQL Server runners:
+  every DT_* column and native limits are read back from the live engine
+
+  [Documentation]
+- documented ColumnType and updated README test totals
+
+2.0.30 (10.11.2026, 1a672fe)
 
   [Bug Fixes]
 - restored post-load/find lazy relation filters without leaking them into later queries
