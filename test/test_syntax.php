@@ -2,6 +2,35 @@
 
 use App\Controller;
 
+class UpgradeOwner extends \DB\Cortex {
+	protected $db = 'DB', $table = 'test_upgrade_owner', $fieldConf = [
+		'name' => ['type' => 'VARCHAR128'],
+		'news' => ['has-many' => ['UpgradeItem', 'owner']],
+		'profile' => ['has-one' => ['UpgradeItem', 'owner']],
+	];
+}
+class UpgradeItem extends \DB\Cortex {
+	protected $db = 'DB', $table = 'test_upgrade_item', $fieldConf = [
+		'title' => ['type' => 'VARCHAR128'],
+		'owner' => ['belongs-to-one' => 'UpgradeOwner'],
+		'options' => ['type' => self::DT_JSON],
+		'targets' => ['belongs-to-many' => ['UpgradeTarget', 'code']],
+	];
+}
+class UpgradeTarget extends \DB\Cortex {
+	protected $db = 'DB', $table = 'test_upgrade_target', $primary = 'code', $fieldConf = [
+		'code' => ['type' => 'VARCHAR128'],
+		'title' => ['type' => 'VARCHAR128'],
+	];
+}
+class UpgradeParser extends \DB\Cortex\CortexQueryParser {
+	public $hashCalls = 0;
+	protected function computeConfigurationHash($fields, $primary) {
+		$this->hashCalls++;
+		return parent::computeConfigurationHash($fields, $primary);
+	}
+}
+
 class Test_Syntax {
 
 	function run($db,$type)
@@ -381,6 +410,7 @@ class Test_Syntax {
 		);
 
 		///////////////////////////////////
+		$this->upgradeRegressions($db, $type, $test);
 		return $test->results();
 	}
 
@@ -402,5 +432,153 @@ class Test_Syntax {
 			$out[] = $row;
 		}
 		return $out;
+	}
+
+	private function upgradeRegressions($db, $type, $test) {
+		$isSql = $db instanceof \DB\SQL;
+		$probe = function ($label, $fn) use ($test, $type) {
+			try { $test->expect((bool)$fn(), $type.': upgrade '.$label); }
+			catch (\Throwable $e) { $test->expect(false, $type.': upgrade '.$label.' THREW '.$e->getMessage()); }
+		};
+		foreach (['UpgradeItem', 'UpgradeOwner', 'UpgradeTarget'] as $class)
+			$class::setdown();
+		if ($isSql) {
+			$db->exec('CREATE TABLE '.$db->quotekey('test_upgrade_target')
+				.' ('.$db->quotekey('code').' VARCHAR(128) NOT NULL PRIMARY KEY, '
+				.$db->quotekey('title').' VARCHAR(128))');
+		}
+		UpgradeOwner::setup();
+		UpgradeItem::setup();
+		$a = new UpgradeOwner();
+		$a->name = 'Owner';
+		$a->save();
+		$id = $a->getRaw('_id');
+		foreach (['Alpha', 'Beta'] as $title) {
+			$n = new UpgradeItem();
+			$n->title = $title;
+			$n->owner = $a;
+			$n->save();
+		}
+		foreach (['load', 'find'] as $operation) {
+			$probe('filter after '.$operation, function () use ($operation, $id) {
+				$m = new UpgradeOwner();
+				if ($operation == 'load') $m->load(['_id = ?', $id]);
+				else $m = $m->find(['_id = ?', $id])[0];
+				$m->filter('news', ['title = ?', 'Alpha']);
+				return $m->news && count($m->news) === 1 && $m->news[0]->title === 'Alpha';
+			});
+		}
+		$probe('filter after load has-one', function () use ($id) {
+			$m = new UpgradeOwner();
+			$m->load(['_id = ?', $id]);
+			$m->filter('profile', ['title = ?', 'Missing']);
+			return $m->profile === null;
+		});
+		$probe('collection record filter stays independent of shared relation cache', function () use ($id) {
+			$r = (new UpgradeOwner())->find(['_id = ?', $id]);
+			// A preloaded shared set must not defeat a later record filter.
+			$r->setRelSet('news', null);
+			$r[0]->filter('news', ['title = ?', 'Beta']);
+			return $r[0]->news && count($r[0]->news) === 1 && $r[0]->news[0]->title === 'Beta';
+		});
+		$probe('post-load filter does not leak into next query', function () use ($id) {
+			$m = new UpgradeOwner();
+			$m->load(['_id = ?', $id]);
+			$m->filter('news', ['title = ?', 'Alpha']);
+			$count = count($m->news);
+			$m->load(['_id = ?', $id]);
+			return $count === 1 && count($m->news) === 2;
+		});
+		if ($isSql) {
+			$probe('clear _id preserves primary key', function () {
+				$n = new UpgradeItem();
+				$n->title = 'Clear';
+				$n->save();
+				$id = $n->getRaw('_id');
+				$n->clear('_id');
+				$n->title = 'Updated';
+				$n->save();
+				$r = new UpgradeItem();
+				return $r->load(['_id = ?', $id]) && $r->title === 'Updated';
+			});
+			$probe('clear ordinary field persists NULL', function () {
+				$n = new UpgradeItem();
+				$n->title = 'Clear ordinary';
+				$n->save();
+				$id = $n->getRaw('_id');
+				$n->clear('title');
+				$n->save();
+				$r = new UpgradeItem();
+				return $r->load(['_id = ?', $id]) && $r->title === null;
+			});
+			foreach (['{"a":1}' => ['a' => 1], '[1,2]' => [1,2]] as $text => $expected) {
+				$probe('JSON container text '.$text, function () use ($text, $expected) {
+					$n = new UpgradeItem();
+					$n->options = $text;
+					$set = $n->options;
+					$n->save();
+					$r = new UpgradeItem();
+					$r->load(['_id = ?', $n->getRaw('_id')]);
+					$cast = $r->cast(0);
+					$c = new UpgradeItem();
+					$c->copyfrom(['options' => $text]);
+					return $set === $expected && $r->options === $expected
+						&& $cast['options'] === $expected && $c->options === $expected;
+				});
+			}
+			foreach (['hello', '', '0', false, 0, 'false', 'null', '"hello"', '{invalid'] as $value) {
+				$probe('JSON scalar '.var_export($value, true), function () use ($value) {
+					$n = new UpgradeItem();
+					$n->options = $value;
+					$set = $n->options;
+					$n->save();
+					$r = new UpgradeItem();
+					$r->load(['_id = ?', $n->getRaw('_id')]);
+					$c = new UpgradeItem();
+					$cast = $r->cast(null, 0);
+					$c->copyfrom(['options' => $r->getRaw('options')]);
+					return $set === $value && $r->options === $value && $cast['options'] === $value && $c->options === $value;
+				});
+			}
+		}
+		$target = new UpgradeTarget();
+		$target->code = '123';
+		$target->title = 'Numeric text';
+		$target->save();
+		$probe('BTM numeric text key saved by ORM', function () {
+			$n = new UpgradeItem();
+			$n->title = 'ORM numeric key';
+			$n->targets = ['123'];
+			$n->save();
+			$q = new UpgradeItem();
+			$q->has('targets', ['title = ?', 'Numeric text']);
+			$r = $q->find(['title = ?', 'ORM numeric key']);
+			return $r && count($r) === 1;
+		});
+		if ($isSql) foreach (['[123]', '["123"]'] as $json) {
+			$probe('BTM existing JSON '.$json, function () use ($db, $json) {
+				$db->exec('INSERT INTO '.$db->quotekey('test_upgrade_item')
+					.' ('.$db->quotekey('title').','.$db->quotekey('targets').') VALUES (?,?)', [$json, $json]);
+				$q = new UpgradeItem();
+				$q->has('targets', ['title = ?', 'Numeric text']);
+				$r = $q->find(['title = ?', $json]);
+				return $r && count($r) === 1;
+			});
+		}
+		$probe('parser configuration fingerprint reused and invalidated', function () use ($db, $isSql) {
+			$p = new UpgradeParser();
+			$fields = ['title' => ['type' => 'VARCHAR128']];
+			$engine = $isSql ? 'sql' : 'jig';
+			for ($i = 0; $i < 5; $i++) $p->prepareFilter(['_id = ?', 'abc'], $engine, $db, $fields, 'id');
+			$once = $p->hashCalls === 1;
+			$fields['title']['type'] = 'TEXT';
+			$p->prepareFilter(['_id = ?', 'abc'], $engine, $db, $fields, 'id');
+			$changed = $p->hashCalls === 2;
+			$r = $p->prepareFilter(['_id = ?', 'abc'], $engine, $db, $fields, 'code');
+			return $once && $changed && $p->hashCalls === 3
+				&& (!$isSql || str_contains($r[0], 'code'));
+		});
+		foreach (['UpgradeItem', 'UpgradeOwner', 'UpgradeTarget'] as $class)
+			$class::setdown();
 	}
 }

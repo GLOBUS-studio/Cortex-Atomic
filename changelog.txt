@@ -3,6 +3,206 @@ https://github.com/GLOBUS-studio/Cortex-Atomic
 Part of Atomic Framework: https://github.com/MADEVAL/Atomic-Framework
 Based on Cortex by ikkez (Christian Knuth) for Fat-Free Framework.
 
+2.0.30 (10.11.2026)
+
+  [Bug Fixes]
+- restored post-load/find lazy relation filters without leaking them into later queries
+- kept clear('_id') from nulling the SQL primary key while ordinary fields still persist NULL
+- matched numeric-looking text belongs-to-many keys in existing numeric and string JSON data
+- decoded pre-encoded DT_JSON object/array text on SQL while preserving scalar values
+- memoized bounded query-parser configuration fingerprints, retaining field and primary-key isolation
+
+  [Documentation]
+- refreshed README support and test information; MariaDB is now listed explicitly
+- added an evidence-based engine support matrix separating stable, preview/non-stable
+  and future-port integrations
+- updated README test totals; PostgreSQL 18.6 verified again
+- classified PostgreSQL and Jig as stable project-supported engines while retaining
+  their latest verification status in the matrix
+
+2.0.29 (31.08.2026, 8a364db)
+
+  [Test Suite]
+- added SQL regression coverage for belongs-to-many relations with text primary keys
+- corrected Jig coverage to use `_id` and expect the `Jig` database type
+
+2.0.28 (31.08.2026, 89c98fa)
+
+  [Bug Fixes]
+- consumed deferred relation filters after relation access and invalidated stale
+  deferred filters when a new filter chain starts
+- preserved explicit text relation keys during MongoDB relation-filtered erase
+- made empty schemaless belongs-to-many `orHas()` retain the base filter
+- allowed safe punctuation inside quoted Jig filter literals
+
+  [Test Suite]
+- added permanent coverage for relation-filter lifecycle, MongoDB text-key erase,
+  empty relation OR filters and quoted Jig literals
+
+2.0.27 (30.08.2026, 1ba3df3)
+
+  [Bug Fixes]
+- kept relation-count values aligned when results are sorted by a virtual count field
+- hardened Jig filters against functions, malformed field paths, empty expressions
+  and comment/statement syntax while preserving quoted literals
+- normalized schemaless belongs-to-many values from JSON strings and iterators
+
+2.0.26 (30.08.2026, 41a2f9b)
+
+  [Bug Fixes]
+- reindexed CortexCollection after `orderBy()` and `slice()` so positional keys
+  remain sequential and agree with iteration order
+
+2.0.25 (30.08.2026, aae5a6a)
+
+  [Bug Fixes]
+- made Jig and MongoDB belongs-to-many scans treat missing, NULL and empty optional
+  relation fields as empty sets
+- preserved a genuinely empty related result for `has()` and `count()`
+
+2.0.24 (30.08.2026, a219e78)
+
+  [Bug Fixes]
+- made has-one assignment replace and detach the previous child instead of leaving
+  multiple children linked
+- kept assigned and cleared has-one values synchronized with the relation cache
+- rejected replacement or clearing when the child link is non-nullable
+
+2.0.23 (30.08.2026, 9501b04)
+
+  [Bug Fixes]
+- made `clear()` set mapped SQL fields to NULL so clearing survives `save()`
+- retained removal behavior for ad-hoc fields and relation-specific clearing
+
+2.0.22 (30.08.2026, e1ce029)
+
+  [Bug Fixes]
+- separated next-query relation filters from deferred relation-loading filters
+- cleared `has()` state after every query attempt, including empty and exceptional paths
+- stopped failed `find()`, ordinary `load()`, reset and clone operations from leaking
+  relation filters into later queries
+
+2.0.21 (30.08.2026, bc8348d)
+
+  [Bug Fixes]
+- reset per-relation result state while processing chained SQL `has()` conditions,
+  making mixed subquery and many-to-many JOIN filters order-independent
+
+2.0.20 (30.08.2026, 204d4dc)
+
+  [Bug Fixes]
+- passed field configuration and the primary key into MongoDB filter preparation
+  during relation-filtered `erase()`
+- restored erase behavior for models both with and without many-to-many relations
+
+2.0.19 (30.08.2026, 019ca75)
+
+  [Bug Fixes]
+- preserved valid falsy DT_JSON scalars such as `0`, `false` and empty strings
+  through set, save, load, cast and copy operations
+- separated JSON decoding from legacy DT_SERIALIZED decoding across storage engines
+
+2.0.18 (30.08.2026, 9bdc169)
+
+  [Bug Fixes]
+- included model field configuration and primary key in query-parser cache keys
+- translated SQL LIKE wildcards to escaped regular expressions so regex punctuation
+  in user values remains literal on Jig and MongoDB
+
+2.0.17 (30.08.2026, f883d27)
+
+  [Schema]
+- used native `RENAME COLUMN` on MySQL 8.0.3+ and MariaDB 10.5.3+
+- retained definition-rebuilding fallback for older and unknown server versions
+- handled MariaDB compatibility prefixes and distribution version suffixes
+
+2.0.16 (29.08.2026, 389274c)
+
+  [Bug Fixes]
+- normalized parenthesized `IN(?)` and `LIKE(?)` binds without changing quoted text
+- matched MongoDB operators by position and boundary instead of unsafe substring splits
+- added coverage for escaped literals, named binds and field names containing operator text
+
+2.0.15 (29.08.2026, 108617d)
+
+  [Schema]
+- centralized numeric SQL/Cortex type detection in `Schema::isNumericType()`
+- reused the classifier for relation keys and MySQL/MariaDB modifier preservation
+- expanded coverage for numeric aliases, sizes and modifiers
+
+2.0.14 (29.08.2026, ded4c18)
+
+  [Bug Fixes]
+- JSON-quoted text primary keys in MySQL/MariaDB belongs-to-many containment queries
+- preserved numeric modifiers while changing MySQL/MariaDB column definitions
+
+2.0.13 (29.08.2026, 4a7e54f)
+
+  [Bug Fixes]
+- restricted full column-definition reconstruction to MySQL/MariaDB CHANGE operations
+- left PostgreSQL, IBM DB2 and SQL Server rename paths on their native syntax
+
+2.0.12 (28.08.2026, b902275)
+
+  [Bug Fixes]
+- required word boundaries when recognizing MongoDB filter operators so operator-like
+  text inside field names is not parsed as syntax
+
+2.0.11 (28.08.2026, d0d4977)
+
+  [Bug Fixes]
+- made SQL `IN` and `NOT IN` bind expansion case-insensitive
+- left matching text inside quoted literals unchanged
+
+2.0.10 (28.08.2026, b585124)
+
+  [Bug Fixes]
+- normalized `<> NULL` comparisons to `IS NOT NULL` for SQL and Jig
+- added NULL partition coverage for equality and inequality filters
+
+2.0.9 (28.08.2026, 8ae042f)
+
+  [Schema]
+- preserved empty-string defaults, AUTO_INCREMENT, UNSIGNED and ZEROFILL while
+  reconstructing MySQL/MariaDB columns
+- documented metadata that still cannot be represented by reconstructed definitions
+
+2.0.8 (28.08.2026, 6a5787b)
+
+  [Bug Fixes]
+- applied SQL operator precedence to mixed MongoDB `AND`/`OR` filters by building
+  OR groups containing tighter AND groups
+
+2.0.7 (27.08.2026, 665e016)
+
+  [Bug Fixes]
+- fixed SQLite table rebuild when adding a CURRENT_TIMESTAMP column to an existing table
+- used the public table-name getter and guarded absent rebuild-update state
+
+2.0.6 (27.08.2026, 82b59a5)
+
+  [Bug Fixes]
+- stopped HTML-encoding schema default values before SQL quoting
+- preserved ampersands, markup characters and apostrophes in string defaults
+
+2.0.5 (27.08.2026, fb104bf)
+
+  [Schema]
+- preserved NOT NULL and DEFAULT when MySQL/MariaDB `MODIFY COLUMN` changes a type
+- retained existing values and default behavior after the type change
+
+2.0.4 (27.08.2026, 6f2ba03)
+
+  [Schema]
+- preserved NOT NULL and DEFAULT when MySQL/MariaDB `CHANGE COLUMN` renames a column
+- added catalog-level verification for constraints, defaults and existing values
+
+2.0.3 (26.08.2026, 12378b4)
+
+  [Bug Fixes]
+- changed MySQL-protocol belongs-to-many `JSON_CONTAINS` candidates from `CAST AS JSON`
+  to `CAST AS CHAR`, restoring compatibility with MariaDB 10.2+
+
 2.0.2 (25.04.2026)
 
   [Bug Fixes]

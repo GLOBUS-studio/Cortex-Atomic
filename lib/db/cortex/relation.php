@@ -245,6 +245,8 @@ trait RelationTrait {
 		$relTable = $rel->getTable();
 		$relPK = $rel->primary;
 		$driver = $this->db->driver();
+		$relFields = $rel->getFieldConfiguration();
+		$isNumericPK = Schema::isNumericType($relFields[$relPK]['type'] ?? 'INT4');
 		$qKey = $this->db->quotekey($this->table).'.'.$this->db->quotekey($key);
 		$qRelTable = $this->db->quotekey($relTable);
 		$qRelPK = $this->db->quotekey($relPK);
@@ -258,23 +260,31 @@ trait RelationTrait {
 		}
 		$alias_r = $this->db->quotekey('__btm_r');
 		if (str_contains($driver,'sqlite')) {
+			$comparison = $isNumericPK ? $alias_r.'.'.$qRelPK.'=__btm_je.value'
+				: 'CAST('.$alias_r.'.'.$qRelPK.' AS TEXT)=CAST(__btm_je.value AS TEXT)';
 			// SQLite 3.9+ json_each()
 			$exists = 'EXISTS(SELECT 1 FROM json_each('.$qKey.') __btm_je'
 				.','.$qRelTable.' '.$alias_r
-				.' WHERE '.$alias_r.'.'.$qRelPK.'=__btm_je.value'
+				.' WHERE '.$comparison
 				.($relWhere?' AND ('.$relWhere.')':'').')';
 		} elseif ($driver=='mysql') {
 			// MySQL 5.7+ / MariaDB 10.2+ JSON_CONTAINS()
 			// MariaDB has no JSON cast target. A numeric PK rendered as CHAR is
 			// valid JSON; text PKs must be JSON-quoted to match ["value"].
-			$relFields = $rel->getFieldConfiguration();
-			$relPKType = $relFields[$relPK]['type'] ?? 'INT4';
-			$isNumericPK = Schema::isNumericType($relPKType);
 			$jsonCandidate = 'CAST('.$alias_r.'.'.$qRelPK.' AS CHAR)';
 			if (!$isNumericPK)
 				$jsonCandidate = 'JSON_QUOTE('.$jsonCandidate.')';
+			$contains = 'JSON_CONTAINS('.$qKey.','.$jsonCandidate.')';
+			if (!$isNumericPK) {
+				// Older writers coerced numeric-looking text IDs to integers.
+				// Keep those rows searchable alongside correctly quoted text IDs.
+				$asInteger = 'CAST(CAST('.$alias_r.'.'.$qRelPK.' AS SIGNED) AS CHAR)';
+				$numeric = 'CASE WHEN '.$asInteger.'=CAST('.$alias_r.'.'.$qRelPK
+					.' AS CHAR) THEN '.$asInteger.' ELSE NULL END';
+				$contains = '('.$contains.' OR JSON_CONTAINS('.$qKey.','.$numeric.'))';
+			}
 			$exists = 'EXISTS(SELECT 1 FROM '.$qRelTable.' '.$alias_r
-				.' WHERE JSON_CONTAINS('.$qKey.','.$jsonCandidate.')'
+				.' WHERE '.$contains
 				.($relWhere?' AND ('.$relWhere.')':'').')';
 		} elseif ($driver=='pgsql') {
 			// PostgreSQL json_array_elements_text()
@@ -308,6 +318,11 @@ trait RelationTrait {
 			$this->relFilter[$key.'.'][$fkey] = [$filter,$option];
 		} else
 			$this->relFilter[$key] = [$filter,$option];
+		// The current hydrated record may resolve this filter before another query.
+		$this->lazyRelFilter = $this->relFilter;
+		// A record-specific filter must not reuse or populate a shared relation set.
+		if (!$this->dry())
+			$this->collection = null;
 		return $this;
 	}
 
@@ -362,7 +377,8 @@ trait RelationTrait {
 	 * @param string $key
 	 */
 	protected function consumeLazyRelFilter($key) {
-		unset($this->lazyRelFilter[$key], $this->lazyRelFilter[$key.'.']);
+		unset($this->lazyRelFilter[$key], $this->lazyRelFilter[$key.'.'],
+			$this->relFilter[$key], $this->relFilter[$key.'.']);
 	}
 
 	/**
@@ -559,6 +575,12 @@ trait RelationTrait {
 		elseif (is_array($val)) {
 			// array of single hydrated mappers, raw ID value or mixed
 			$isMongo = ($this->dbsType == 'mongo');
+			$textKey = false;
+			if ($this->dbsType == 'sql' && isset($this->fieldConf[$key]['belongs-to-many'])) {
+				$rel = $this->getRelFromConf($this->fieldConf[$key]['belongs-to-many'], $key);
+				$type = $rel->getFieldConfiguration()[$rel_field]['type'] ?? 'INT4';
+				$textKey = !Schema::isNumericType($type);
+			}
 			foreach ($val as &$item) {
 				if (is_object($item) &&
 					!($isMongo && (($this->db->legacy() && $item instanceof \MongoId) ||
@@ -569,7 +591,9 @@ trait RelationTrait {
 				}
 				if ($isMongo && $rel_field == '_id' && is_string($item))
 					$item = $this->db->legacy() ? new \MongoId($item) : new \MongoDB\BSON\ObjectId($item);
-				if (is_numeric($item))
+				if ($textKey)
+					$item = (string) $item;
+				elseif (is_numeric($item))
 					$item = (int) $item;
 				unset($item);
 			}

@@ -240,8 +240,15 @@ trait FieldAccessTrait {
 			// encode JSON-backed fields for SQL, which stores them as text
 			if ($this->dbsType == 'sql') {
 				$type = $fields[$key]['type'] ?? null;
-				if ($val !== null && in_array($type, [self::DT_JSON,self::DT_SERIALIZED], true))
+				if ($val !== null && in_array($type, [self::DT_JSON,self::DT_SERIALIZED], true)) {
+					// Accept pre-encoded containers, but retain scalar strings verbatim.
+					if ($type == self::DT_JSON && is_string($val)) {
+						$decoded = json_decode($val, true);
+						if (json_last_error() === JSON_ERROR_NONE && is_array($decoded))
+							$val = $decoded;
+					}
 					$val=json_encode($val);
+				}
 				elseif (is_array($val))
 					throw new \Exception(sprintf(self::E_ARRAY_DATATYPE,$key));
 			}
@@ -675,7 +682,9 @@ trait FieldAccessTrait {
 			return $this->mapper->clear($key);
 		}
 		if ($this->dbsType == 'sql') {
-			$mappedKey = $key == '_id' ? $this->primary : $key;
+			if ($key == '_id')
+				return;
+			$mappedKey = $key;
 			if (array_key_exists($mappedKey,$this->mapper->schema()))
 				return $this->set($key,null);
 		}

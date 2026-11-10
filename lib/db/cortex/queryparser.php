@@ -12,8 +12,26 @@ class CortexQueryParser extends \Prefab {
 		E_INVALID_FIELD_NAME = 'Invalid field name: %s';
 
 	protected
+		$configurationCache = [],
 		$queryCache = [],
 		$queryCacheLimit = 128;
+
+	/** Reuse fingerprints for unchanged configurations; bound retained snapshots. */
+	protected function configurationHash($fields, $primary) {
+		foreach ($this->configurationCache as $entry)
+			if ($entry[0] === $fields && $entry[1] === $primary)
+				return $entry[2];
+		$hash = $this->computeConfigurationHash($fields, $primary);
+		if (count($this->configurationCache) >= $this->queryCacheLimit)
+			array_shift($this->configurationCache);
+		$this->configurationCache[] = [$fields, $primary, $hash];
+		return $hash;
+	}
+
+	protected function computeConfigurationHash($fields, $primary) {
+		$f3 = \Base::instance();
+		return $f3->hash($f3->stringify([$fields, $primary]));
+	}
 
 	/**
 	 * converts the given filter array to fit the used DBS
@@ -40,7 +58,7 @@ class CortexQueryParser extends \Prefab {
 		$cacheHash = $f3->hash($f3->stringify($cond)).'.'.$engine;
 		if ($engine=='sql')
 			$cacheHash.='-'.$db->driver();
-		$cacheHash.='-'.$f3->hash($f3->stringify([$fieldConf,$primary]));
+		$cacheHash.='-'.$this->configurationHash($fieldConf, $primary);
 		if (isset($this->queryCache[$cacheHash]))
 			// load from memory
 			return $this->queryCache[$cacheHash];

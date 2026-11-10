@@ -2,20 +2,21 @@
 
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 [![PHP](https://img.shields.io/badge/PHP-%3E%3D8.0-777BB4.svg)](https://www.php.net/)
-[![Tests](https://img.shields.io/badge/tests-577%20passed-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-781%20passed-brightgreen)]()
 
 **A multi-engine ORM / ODM for [Atomic Framework](https://github.com/MADEVAL/Atomic-Framework)**
 Developed and maintained by [GLOBUS.studio](https://github.com/GLOBUS-studio/Cortex-Atomic).
 Based on [Cortex](https://github.com/ikkez/F3-Sugar/tree/master/Cortex) by Christian Knuth (ikkez) for [Fat-Free Framework](https://fatfreeframework.com/).
 
-> PHP 8.0 - 8.5 | SQLite, MySQL, PostgreSQL, SQL Server, MongoDB, Jig
-> 577 tests | GPLv3
+> PHP 8.0 - 8.5 | Stable: SQLite, MySQL, MariaDB, PostgreSQL, MongoDB, Jig
+> Preview: SQL Server
+> 781 tests | GPLv3
 
 ### A multi-engine ORM / ODM - Cortex-Atomic
 
 Cortex is a multi-engine ActiveRecord ORM / ODM that offers easy object persistence. Some of its main features are:
 
-  - It handles SQL, Jig and MongoDB database engines
+  - One mapper API for SQL, Jig and MongoDB database engines
   - Write queries in well-known SQL Syntax, they can be translated to Jig and Mongo
   - automated SQL table creation and column extension from defined schema configurations
   - Easy prototyping with the SQL Fluid Mode, which makes your RDBMS schema-less and adds new table columns automatically
@@ -30,7 +31,7 @@ Cortex is a multi-engine ActiveRecord ORM / ODM that offers easy object persiste
 #### Changes from the original Cortex
 
   - **PHP 8.0+** - minimum requirement, uses `str_contains()`, removed deprecated `setAccessible()` calls
-  - **PHP 8.5 compatible** - fully tested and working (513 tests)
+  - **PHP 8.5 compatible** - covered by the current 781-test suite
   - **Trait-based architecture** - Cortex class decomposed into 5 focused traits:
     - `SchemaBuilderTrait` - table setup/setdown, schema resolution, defaults
     - `CastTrait` - casting mappers to arrays, field type serialization
@@ -41,11 +42,34 @@ Cortex is a multi-engine ActiveRecord ORM / ODM that offers easy object persiste
   - **Integrated Schema Builder** - forked `ikkez/f3-schema-builder` into `lib/db/cortex/schema/`, zero external dependencies
     - Full FK constraint support (inline for SQLite, ALTER TABLE for others)
     - Pivot table creation with UNIQUE indexes and FK constraints
-    - Multi-DB driver coverage: SQLite, MySQL, PostgreSQL, SQL Server, IBM DB2, ODBC
+    - Schema compatibility paths for multiple SQL drivers; see the support status below
     - Backward-compatible `\DB\SQL\Schema` alias via `class_alias`
-  - **577 tests** - comprehensive test suite covering all public API, relations, schema, nullability/FK behavior, edge cases and all 15 fixes (SQLite 577, MongoDB 279)
+  - **781 tests** - cross-engine coverage for the public API, relations, schema behavior, edge cases and confirmed regressions
   - **Atomic Framework** - prepared for integration into the [Atomic ecosystem](https://github.com/MADEVAL/Atomic-Framework)
   - **Fat-Free Framework** - fully compatible with F3 3.9.x as standalone ORM
+
+#### Engine support status
+
+Status reflects the engines supported by the project. The verification column
+records the latest available end-to-end result; **Preview** integrations are not
+currently release-certified and should not be treated as production-stable.
+
+| Engine | Status | Latest verification |
+| --- | --- | --- |
+| SQLite | Stable | 781/781 tests passing |
+| MySQL 26.10 | Stable | 812/812 tests passing |
+| MariaDB 12.0.2 | Stable | 812/812 tests passing |
+| MongoDB | Stable | 362/362 applicable tests passing |
+| PostgreSQL 18.6 | Stable | 805/805 tests passing |
+| SQL Server | Preview / non-stable | 136/148 tests passing; 12 integration failures remain |
+| Jig | Stable | 337/367 tests passing in the combined runner; 30 remaining failures are primarily shared-fixture count mismatches |
+| IBM DB2, ODBC, Sybase/dblib | Future ports | Schema compatibility branches exist, but there is no maintained end-to-end runner or release certification yet |
+
+Runner totals are not directly comparable: SQL engines include schema,
+transaction and constraint suites that do not apply to MongoDB or Jig.
+
+Dedicated stable ports for the future-port group will be supplied after their
+integrations and full regression suites are complete.
 
 
 ---
@@ -97,11 +121,11 @@ Create a DB object of your choice. You can choose between [SQL](http://fatfreefr
 ```php
 // SQL - MySQL
 $db = new \DB\SQL('mysql:host=localhost;port=3306;dbname=MyAppDB','user','pw');
-// SQL - SQlite
+// SQL - SQLite
 $db = new \DB\SQL('sqlite:db/database.sqlite');
-// SQL - PostgreSQL 
+// SQL - PostgreSQL
 $db = new \DB\SQL('pgsql:host=localhost;dbname=MyAppDB','user','pw');
-// SQL - SQL Server 
+// SQL - SQL Server (preview / non-stable)
 $db = new \DB\SQL('sqlsrv:SERVER=LOCALHOST\SQLEXPRESS2012;Database=MyAppDB','user','pw');
 // Jig
 $db = new \DB\Jig('data/');
@@ -2101,24 +2125,17 @@ php test/run.php
 
 Tests run against SQLite (no external DB server required). The suite covers:
 
-- **Syntax** (19 tests) - operators, NULL checks, IN, LIKE, logical chaining, order, limit
-- **Relations** (29 tests) - belongs-to-one, has-one, has-many, many-to-many, self-referencing, erase cascade
-- **Filters** (26 tests) - has-filter, pagination, whitelists, countRel, nested has-filter, datetime
-- **Common** (21 tests) - copyfrom/copyto, cast with relation depths, collection API, query parser
-- **Coverage** (44 tests) - public methods, error paths, event hooks, edge cases
-- **Collection** (32 tests) - CortexCollection API: castAll, getAll, getBy, orderBy, slice, compare
-- **Coverage Extra** (76 tests) - compare(), rel(), countRel, fluid SQL mode, touch(), virtual()
-- **Transactions** (22 tests) - implicit transaction commit/rollback, nesting, erase rollback
-- **Constraints** (24 tests) - FK enforcement, pivot UNIQUE, hasForeignKey/hasIndex introspection
-- **Nullability/FK** (26 tests) - belongs-to-one ON DELETE behavior, nullable validation, explicit onDelete
-- **Eager Loading** (23 tests) - with() fluent API, dot-notation, depth-based, filter integration
-- **Edge Cases** (45 tests) - NULL filters, empty strings, orphan records, boundary conditions
-- **Hardened** (118 tests) - stress tests, parser unit tests, reserved words, concurrent updates
-- **Schema** (21 tests) - class_alias, createTable, alterTable, FK methods, pivot operations
-- **IN Syntax** (5 tests) - IN (?) normalization, array expansion, named params
-- **Multi-DB Coverage** (28 tests) - type resolution per driver, DT_* constants
+- **Syntax** - operators, NULL checks, IN, LIKE, logical chaining, order and limit
+- **Relations** - belongs-to-one, has-one, has-many, many-to-many, self-referencing relations and erase cascades
+- **Filters** - has-filter, pagination, whitelists, countRel, nested has-filter and datetime handling
+- **Common API and collections** - copying, casting, relation depths, sorting, slicing and comparisons
+- **Coverage and hardened cases** - public methods, error paths, events, reserved words and parser edge cases
+- **Transactions and constraints** - commit/rollback behavior, nesting, foreign keys and pivot uniqueness
+- **Schema and nullability** - table changes, type resolution, ON DELETE behavior and nullable validation
+- **Eager loading and edge cases** - fluent `with()`, dot notation, NULLs, empty values and orphan records
+- **Regression fixes** - permanent coverage for each confirmed issue fixed in the 2.0.x history
 
-**577 tests total**, all passing on PHP 8.0 - 8.5.
+**781 tests total.**
 
 ### File structure
 
