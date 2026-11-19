@@ -14,7 +14,7 @@
 namespace DB\Cortex;
 
 use DB\Cortex;
-use DB\SQL\Schema;
+use DB\Cortex\Schema\Schema;
 
 trait FieldAccessTrait {
 

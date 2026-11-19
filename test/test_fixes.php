@@ -590,6 +590,37 @@ class Test_Fixes {
             $type.': #22 find() lowercase `not in` matches uppercase `NOT IN`'
         );
 
+
+        // ====================================================================
+        // #23 Library code must not depend on the lazily registered
+        //     DB\SQL\Schema alias. Runs in a fresh process with no preload,
+        //     because the runners register the alias up front.
+        // ====================================================================
+        $script23 = tempnam(sys_get_temp_dir(), 'cx23');
+        $jig23 = sys_get_temp_dir().DIRECTORY_SEPARATOR.'cx23_'.uniqid().DIRECTORY_SEPARATOR;
+        file_put_contents($script23, '<?php
+require '.var_export(__DIR__.'/vendor/autoload.php', true).';
+\Base::instance()->set("QUIET", true);
+$db = new \DB\Jig('.var_export($jig23, true).', \DB\Jig::FORMAT_JSON);
+$cx = new \DB\Cortex($db, "alias23", true, 0);
+$cx->setFieldConfiguration([
+    "num" => ["type" => "INT4"],
+    "stamp" => ["type" => "DATE", "default" => "CUR_STAMP"],
+]);
+$cx->reset();
+$cx->num = 0;
+$cx->stamp = "";
+echo "num=", var_export($cx->num, true), ";stamp=", var_export($cx->stamp, true);
+');
+        $out23 = (string) shell_exec(escapeshellarg(PHP_BINARY).' '.escapeshellarg($script23).' 2>&1');
+        @unlink($script23);
+        foreach (glob($jig23.'*') ?: [] as $f23) @unlink($f23);
+        @rmdir($jig23);
+        $test->expect(
+            trim($out23) === 'num=0;stamp=NULL',
+            $type.': #23 empty values and CUR_STAMP defaults work without the DB\SQL\Schema alias ('.trim($out23).')'
+        );
+
         return $test->results();
     }
 }

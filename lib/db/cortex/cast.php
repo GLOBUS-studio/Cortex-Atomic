@@ -310,7 +310,7 @@ trait CastTrait {
 			&& !empty($this->fieldConf))
 			foreach($this->fieldConf as $field_key => $field_conf)
 				if (array_key_exists('default',$field_conf)) {
-					$val = ($field_conf['default'] === \DB\SQL\Schema::DF_CURRENT_TIMESTAMP)
+					$val = ($field_conf['default'] === \DB\Cortex\Schema\Schema::DF_CURRENT_TIMESTAMP)
 						? date('Y-m-d H:i:s') : $field_conf['default'];
 					$this->set($field_key, $val);
 				}
@@ -345,7 +345,7 @@ trait CastTrait {
 			$fields = array_replace_recursive($this->mapper->schema(),$fields);
 		foreach($fields as $field_key => $field_conf)
 			if (array_key_exists('default',$field_conf)) {
-				$val = ($field_conf['default'] === \DB\SQL\Schema::DF_CURRENT_TIMESTAMP)
+				$val = ($field_conf['default'] === \DB\Cortex\Schema\Schema::DF_CURRENT_TIMESTAMP)
 					? date('Y-m-d H:i:s') : $field_conf['default'];
 				if ($val!==NULL) {
 					$out[$field_key]=$val;
