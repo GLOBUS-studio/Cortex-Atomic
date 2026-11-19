@@ -210,10 +210,6 @@ trait FieldAccessTrait {
 					return $val;
 				}
 			}
-			// validate nullable constraint
-			if ($val === NULL
-				&& array_key_exists('nullable', $fields[$key]) && $fields[$key]['nullable'] === false)
-                throw new \Exception(sprintf(self::E_NULLABLE_COLLISION,$key));
 			// MongoId shorthand
 			if ($this->dbsType == 'mongo' && (($this->db->legacy() && !$val instanceof \MongoId)
 					|| (!$this->db->legacy() && !$val instanceof \MongoDB\BSON\ObjectId))) {
@@ -237,6 +233,13 @@ trait FieldAccessTrait {
 				in_array($fields[$key]['type'], [Schema::DT_DATE,Schema::DT_DATETIME])
 			)
 				$val=NULL;
+			// NOT NULL is enforced on save, not on assignment
+			if (array_key_exists('nullable', $fields[$key]) && $fields[$key]['nullable'] === false) {
+				if ($val === NULL)
+					$this->nullCollisions[$key] = true;
+				else
+					unset($this->nullCollisions[$key]);
+			}
 			// encode JSON-backed fields for SQL, which stores them as text
 			if ($this->dbsType == 'sql') {
 				$type = $fields[$key]['type'] ?? null;

@@ -55,6 +55,7 @@ class Cortex extends Cursor {
 		$dbsType,       // mapper engine type [jig, sql, mongo]
 		$fieldsCache,   // relation field cache
 		$saveCsd,       // mm rel save cascade
+		$nullCollisions = [], // NOT NULL fields assigned NULL, checked on save
 		$collection,    // collection
 		$trigger = [],  // custom field event handlers
 		$relFilter,     // next-query relation filters
@@ -254,6 +255,7 @@ class Cortex extends Cursor {
 		$this->mapper = clone($this->mapper);
 		$this->fieldsCache = [];
 		$this->saveCsd = [];
+		$this->nullCollisions = [];
 		$this->collection = null;
 		$this->hasCond = null;
 		// Clones must not inherit relation-filter state.

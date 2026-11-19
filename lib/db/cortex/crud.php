@@ -558,6 +558,17 @@ trait CrudTrait {
 	}
 
 	/**
+	 * reject NULL still assigned to a NOT NULL field; runs after the
+	 * before* events so app validation can answer first. Tracked on set(),
+	 * because the SQL mapper silently casts NULL to the column type.
+	 */
+	protected function assertNullable() {
+		if ($this->nullCollisions)
+			throw new \Exception(sprintf(self::E_NULLABLE_COLLISION,
+				implode(', ', array_keys($this->nullCollisions))));
+	}
+
+	/**
 	 * additional save operations
 	 */
 	protected function _aftersave() {
@@ -700,6 +711,7 @@ trait CrudTrait {
 		$this->_beforesave();
 		if ($this->emit('beforeinsert')===false)
 			return false;
+		$this->assertNullable();
 		$needsTx = $this->dbsType == 'sql' && !$this->db->trans();
 		if ($needsTx)
 			$this->db->begin();
@@ -729,6 +741,7 @@ trait CrudTrait {
 		$this->_beforesave();
 		if ($this->emit('beforeupdate')===false)
 			return false;
+		$this->assertNullable();
 		$needsTx = $this->dbsType == 'sql' && !$this->db->trans();
 		if ($needsTx)
 			$this->db->begin();

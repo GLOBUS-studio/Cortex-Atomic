@@ -296,6 +296,7 @@ trait CastTrait {
 			$this->mapper->reset();
 		$this->fieldsCache=[];
 		$this->saveCsd=[];
+		$this->nullCollisions=[];
 		if ($essentials) {
 			// used to store filter conditions and parameters
 			$this->countFields=[];
@@ -325,6 +326,7 @@ trait CastTrait {
 		foreach ($fields as $field) {
 			unset($this->fieldsCache[$field]);
 			unset($this->saveCsd[$field]);
+			unset($this->nullCollisions[$field]);
 			if (isset($defaults[$field]))
 				$this->set($field,$defaults[$field]);
 			else {

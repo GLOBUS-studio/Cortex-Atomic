@@ -621,6 +621,82 @@ echo "num=", var_export($cx->num, true), ";stamp=", var_export($cx->stamp, true)
             $type.': #23 empty values and CUR_STAMP defaults work without the DB\SQL\Schema alias ('.trim($out23).')'
         );
 
+        // ====================================================================
+        // #25 NOT NULL is enforced on save, not on assignment. Assigning NULL
+        //     must not throw; insert/update with NULL still left must throw
+        //     after the before* events, so app validation can answer first.
+        // ====================================================================
+        \StrictNewsModel::setdown();
+        \StrictNewsModel::setup();
+        $author25 = new \AuthorModel();
+        $author25->name = 'Author25';
+        $author25->save();
+        $msg25 = sprintf(\DB\Cortex::E_NULLABLE_COLLISION, 'author');
+
+        $assignError25 = null;
+        $sn25 = new \StrictNewsModel();
+        try {
+            $sn25->title = 'Null25';
+            $sn25->author = null;
+        } catch (\Throwable $e) {
+            $assignError25 = $e;
+        }
+        $test->expect(
+            $assignError25 === null,
+            $type.': #25 assigning NULL to a NOT NULL field does not throw'
+        );
+
+        $insertError25 = null;
+        try {
+            $sn25->save();
+        } catch (\Throwable $e) {
+            $insertError25 = $e;
+        }
+        $test->expect(
+            $insertError25 !== null && $insertError25->getMessage() === $msg25 && $sn25->dry()
+                && (new \StrictNewsModel())->count(['title = ?', 'Null25']) === 0,
+            $type.': #25 insert with NULL in a NOT NULL field throws and stores nothing'
+        );
+
+        $sn25->author = $author25->_id;
+        $sn25->save();
+        $test->expect(
+            !$sn25->dry(),
+            $type.': #25 replacing the NULL with a value lets the same model save'
+        );
+
+        $updateError25 = null;
+        $sn25->author = null;
+        try {
+            $sn25->save();
+        } catch (\Throwable $e) {
+            $updateError25 = $e;
+        }
+        $reload25 = new \StrictNewsModel();
+        $reload25->load(['title = ?', 'Null25']);
+        $test->expect(
+            $updateError25 !== null && $updateError25->getMessage() === $msg25
+                && !$reload25->dry() && $reload25->getRaw('author') == $author25->_id,
+            $type.': #25 update to NULL in a NOT NULL field throws and keeps the stored value'
+        );
+
+        $veto25 = new \StrictNewsModel();
+        $veto25->beforeinsert(fn() => false);
+        $veto25->title = 'Veto25';
+        $veto25->author = null;
+        $vetoError25 = null;
+        $vetoResult25 = null;
+        try {
+            $vetoResult25 = $veto25->save();
+        } catch (\Throwable $e) {
+            $vetoError25 = $e;
+        }
+        $test->expect(
+            $vetoError25 === null && $vetoResult25 === false,
+            $type.': #25 a beforeinsert veto runs before the NOT NULL check'
+        );
+        \StrictNewsModel::setdown();
+
         return $test->results();
     }
 }

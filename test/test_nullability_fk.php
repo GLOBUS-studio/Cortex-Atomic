@@ -345,37 +345,40 @@ class Test_Nullability_FK {
 		);
 
 		// ====================================================================
-		// 9. ORM-level nullable validation in set() works for SQL
+		// 9. ORM-level nullable validation runs on save() (not on set())
 		// ====================================================================
 		$a5 = new \AuthorModel();
 		$a5->name = 'SetTestAuthor';
 		$a5->save();
 
+		$nullMsg = sprintf(\DB\Cortex::E_NULLABLE_COLLISION, 'author');
 		$ormRejectNull = false;
+		$sn4 = new \StrictNewsModel();
+		$sn4->title = 'Null Set Test';
+		$sn4->author = null;
 		try {
-			$sn4 = new \StrictNewsModel();
-			$sn4->title = 'Null Set Test';
-			$sn4->author = null;
+			$sn4->save();
 		} catch (\Exception $e) {
-			$ormRejectNull = true;
+			$ormRejectNull = $e->getMessage() === $nullMsg;
 		}
 		$test->expect(
 			$ormRejectNull,
-			$type.': set() on nullable=false belongs-to-one rejects NULL with ORM exception'
+			$type.': save() on nullable=false belongs-to-one rejects NULL with ORM exception'
 		);
 
-		// 9b. set() on nullable=false also catches empty values (coerced to NULL)
+		// 9b. empty values are coerced to NULL and rejected on save() too
 		$ormRejectEmpty = false;
+		$sn5 = new \StrictNewsModel();
+		$sn5->title = 'Empty Set Test';
+		$sn5->author = 0;
 		try {
-			$sn5 = new \StrictNewsModel();
-			$sn5->title = 'Empty Set Test';
-			$sn5->author = 0;
+			$sn5->save();
 		} catch (\Exception $e) {
-			$ormRejectEmpty = true;
+			$ormRejectEmpty = $e->getMessage() === $nullMsg;
 		}
 		$test->expect(
 			$ormRejectEmpty,
-			$type.': set() on nullable=false belongs-to-one rejects empty (0) with ORM exception'
+			$type.': save() on nullable=false belongs-to-one rejects empty (0) with ORM exception'
 		);
 
 		// 9c. set() on nullable=true allows NULL
