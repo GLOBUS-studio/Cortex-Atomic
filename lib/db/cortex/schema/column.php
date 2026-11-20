@@ -24,6 +24,8 @@ class Column {
 
 	protected $name,$type,$nullable,$default,$after,$index,$unique,$passThrough,$pkey,$auto_inc;
 	protected $table,$schema,$type_val;
+	/** foreign key target, set via references() / onDelete() */
+	protected $refTable,$refColumn,$onDelete;
 
 	public function __get($prop) {
 		if (property_exists($this, $prop))
@@ -33,7 +35,14 @@ class Column {
 
 	const
 		TEXT_NoDataType='The specified datatype %s is not defined in %s driver. Add passThrough option to enforce this datatype.',
-		TEXT_CurrentStampDataType='Current timestamp as column default is only possible for TIMESTAMP datatype';
+		TEXT_CurrentStampDataType='Current timestamp as column default is only possible for TIMESTAMP datatype',
+		TEXT_FkEmptyName='Column `%s`: references() needs a non-empty %s name.',
+		TEXT_FkNoReference='Column `%s`: call references() before onDelete().',
+		TEXT_FkBadAction='Column `%s`: unsupported ON DELETE action `%s`. Allowed: %s.',
+		TEXT_FkSetNullNotNull='Column `%s`: ON DELETE SET NULL needs a nullable column, but it is NOT NULL.';
+
+	/** ON DELETE actions accepted by onDelete() */
+	const FK_ACTIONS=['CASCADE','RESTRICT','SET NULL','NO ACTION'];
 
 	/**
 	 * @param string $name
@@ -163,6 +172,92 @@ class Column {
 		$this->index=TRUE;
 		$this->unique=$unique;
 		return $this;
+	}
+
+	/**
+	 * declare a foreign key: this column references $table.$column
+	 * ON DELETE defaults to RESTRICT, change it with onDelete()
+	 * @param string $table real (already prefixed) table name
+	 * @param string $column
+	 * @return $this
+	 */
+	public function references(string $table,string $column='id') {
+		if (trim($table)==='')
+			throw new \InvalidArgumentException(sprintf(self::TEXT_FkEmptyName,$this->name,'table'));
+		if (trim($column)==='')
+			throw new \InvalidArgumentException(sprintf(self::TEXT_FkEmptyName,$this->name,'column'));
+		$this->refTable=$table;
+		$this->refColumn=$column;
+		if ($this->onDelete===NULL)
+			$this->onDelete='RESTRICT';
+		return $this;
+	}
+
+	/**
+	 * set the ON DELETE action of the foreign key declared with references()
+	 * @param string $action CASCADE, RESTRICT, SET NULL or NO ACTION (case-insensitive)
+	 * @return $this
+	 */
+	public function onDelete(string $action) {
+		if ($this->refTable===NULL)
+			throw new \LogicException(sprintf(self::TEXT_FkNoReference,$this->name));
+		$normalized=strtoupper(preg_replace('/\s+/',' ',trim($action)));
+		if (!in_array($normalized,self::FK_ACTIONS,TRUE))
+			throw new \InvalidArgumentException(sprintf(self::TEXT_FkBadAction,
+				$this->name,$action,implode(', ',self::FK_ACTIONS)));
+		$this->onDelete=$normalized;
+		return $this;
+	}
+
+	/**
+	 * whether this column declares a foreign key
+	 * @return bool
+	 */
+	public function hasReference() {
+		return $this->refTable!==NULL;
+	}
+
+	/**
+	 * ON DELETE action as emitted for the current driver.
+	 * SQL Server has no RESTRICT keyword; NO ACTION is its equivalent.
+	 * Also re-checks rules that depend on call order (SET NULL vs nullable(false)).
+	 * @return string
+	 */
+	protected function resolveOnDelete() {
+		if ($this->onDelete==='SET NULL' && !$this->nullable)
+			throw new \LogicException(sprintf(self::TEXT_FkSetNullNotNull,$this->name));
+		if ($this->onDelete==='RESTRICT'
+			&& preg_match('/mssql|sybase|dblib|odbc|sqlsrv/',$this->db->driver()))
+			return 'NO ACTION';
+		return $this->onDelete;
+	}
+
+	/**
+	 * FK clause for CREATE TABLE, e.g. ", FOREIGN KEY(`a`) REFERENCES `t`(`id`) ON DELETE RESTRICT"
+	 * @return string empty when no reference is declared
+	 */
+	public function getForeignKeyClause() {
+		if (!$this->hasReference())
+			return '';
+		return $this->schema->foreignKeyClause($this->name,$this->refTable,
+			$this->refColumn,$this->resolveOnDelete());
+	}
+
+	/**
+	 * ALTER TABLE ... ADD CONSTRAINT query for an existing table
+	 * (constraint name matches Schema::addForeignKey: fk_<table>_<column>)
+	 * @return string empty when no reference is declared
+	 */
+	public function getAddForeignKeyQuery() {
+		if (!$this->hasReference())
+			return '';
+		$table=$this->table->getName();
+		$name='fk_'.$table.'_'.$this->name;
+		if (strlen($name)>63)
+			$name='fk_'.Base::instance()->hash($table.'_'.$this->name);
+		return 'ALTER TABLE '.$this->db->quotekey($table).
+			' ADD CONSTRAINT '.$this->db->quotekey($name).' '.
+			ltrim($this->getForeignKeyClause(),', ').';';
 	}
 
 	/**

@@ -19,7 +19,8 @@ class TableModifier extends TableBuilder {
 		// error messages
 		TEXT_TableNotExisting="Unable to alter table `%s`. It does not exist.",
 		TEXT_NotNullFieldNeedsDefault='You cannot add the not nullable column `%s` without specifying a default value',
-		TEXT_ENGINE_NOT_SUPPORTED='DB Engine `%s` is not supported for this action.';
+		TEXT_ENGINE_NOT_SUPPORTED='DB Engine `%s` is not supported for this action.',
+		TEXT_SqliteNoAddForeignKey='Cannot add column `%s` with a foreign key to existing table `%s`: SQLite cannot add FK constraints via ALTER TABLE. Declare it in createTable() instead.';
 
 	public function setCharset($charset,$collation='unicode') {
 		$this->charset=$charset;
@@ -40,6 +41,12 @@ class TableModifier extends TableBuilder {
 		if ($sqlite=strpos($this->db->driver(),'sqlite')!==FALSE) {
 			$sqlite_queries=[];
 		}
+		// fail before generating anything: SQLite has no ALTER TABLE ADD CONSTRAINT
+		if ($sqlite)
+			foreach ($this->columns as $column)
+				if ($column->hasReference())
+					throw new \LogicException(sprintf(self::TEXT_SqliteNoAddForeignKey,
+						$column->name,$this->name));
 		$rebuild=FALSE;
 		$additional_queries=$this->queries;
 		$this->queries=[];
@@ -76,6 +83,8 @@ class TableModifier extends TableBuilder {
 						"ALTER TABLE $table ADD COLUMN $col_query;",
 				];
 				$this->queries[]=$this->findQuery($cmd);
+				if ($column->hasReference())
+					$this->queries[]=$column->getAddForeignKeyQuery();
 			}
 		}
 		if (strpos($this->db->driver(),'mysql')!==FALSE && !empty($this->charset) &&

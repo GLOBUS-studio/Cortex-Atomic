@@ -37,6 +37,7 @@ class TableCreator extends TableBuilder {
 			return FALSE;
 		}
 		$cols='';
+		$fks='';
 		if (!empty($this->columns))
 			foreach ($this->columns as $cname=>$column) {
 				// no defaults for TEXT type
@@ -47,7 +48,11 @@ class TableCreator extends TableBuilder {
 					return FALSE;
 				}
 				$cols.=', '.$column->getColumnQuery();
+				// inline FK constraints: the only way SQLite accepts them
+				$fks.=$column->getForeignKeyClause();
 			}
+		// table constraints go after all column definitions
+		$cols.=$fks;
 		$table=$this->db->quotekey($this->name);
 		$id=$this->db->quotekey($this->increments);
 		$cmd=[

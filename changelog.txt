@@ -3,6 +3,18 @@ https://github.com/GLOBUS-studio/Cortex-Atomic
 Part of Atomic Framework: https://github.com/MADEVAL/Atomic-Framework
 Based on Cortex by ikkez (Christian Knuth) for Fat-Free Framework.
 
+Unreleased
+
+  [Features]
+- added Column::references($table, $column = 'id') and Column::onDelete($action) to the
+  schema builder: createTable() emits the FK inside CREATE TABLE (all engines, SQLite
+  included); alterTable() adds it via ALTER TABLE ADD CONSTRAINT and throws on SQLite
+- strict validation: onDelete() without references(), unknown actions, SET NULL on a
+  NOT NULL column and empty names throw; RESTRICT is emitted as NO ACTION on SQL Server
+
+  [Test Suite]
+- added Test_Column_FK to the SQLite, MySQL and PostgreSQL runners
+
 2.0.31 (10.11.2026)
 
   [Features]

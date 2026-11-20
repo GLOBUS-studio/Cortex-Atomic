@@ -44,6 +44,7 @@ Cortex is a multi-engine ActiveRecord ORM / ODM that offers easy object persiste
     - Pivot table creation with UNIQUE indexes and FK constraints
     - Schema compatibility paths for multiple SQL drivers; see the support status below
     - Backward-compatible `\DB\SQL\Schema` alias via `class_alias`
+    - Column-level foreign keys in migrations: `->references('users')->onDelete('CASCADE')`
     - `ColumnType` describes live columns as DT_* tokens with their real limits (length, bytes, integer width, precision/scale, fractional seconds, enum values)
   - **808 tests** - cross-engine coverage for the public API, relations, schema behavior, edge cases and confirmed regressions
   - **Atomic Framework** - prepared for integration into the [Atomic ecosystem](https://github.com/MADEVAL/Atomic-Framework)
@@ -86,6 +87,7 @@ integrations and full regression suites are complete.
 		2. [Blacklist Fields](#blacklist-fields)
 	2. [Setup](#set-up)
 	3. [Setdown](#set-down)
+	4. [Foreign keys in migrations](#foreign-keys-in-migrations)
 4. [Relations](#relations)
 	1. [Setup the linkage](#setup-the-linkage)
 	2. [Working with Relations](#working-with-relations)
@@ -383,6 +385,28 @@ This method completely removes the specified table from the used database. So ha
 // Without Model class
 \DB\Cortex::setdown($db, 'users');
 ``` 
+
+
+### Foreign keys in migrations
+
+FK constraints and ON DELETE belong in migrations; the model only declares how a relation is navigated. Declare them on the column:
+
+```php
+use DB\Cortex\Schema\Schema;
+
+$table = $schema->createTable('posts');
+$table->addColumn('author_id')->type(Schema::DT_INT4)->nullable(false)
+      ->references('users')     // referenced column defaults to 'id'
+      ->onDelete('CASCADE');    // default RESTRICT
+$table->build();
+```
+
+- `references(string $table, string $column = 'id')` takes the real table name; no prefix is added.
+- `onDelete()` accepts `CASCADE`, `RESTRICT`, `SET NULL`, `NO ACTION` (case-insensitive). Anything else, `onDelete()` before `references()`, `SET NULL` on a NOT NULL column, or empty names throw.
+- `createTable()` emits the FK inside CREATE TABLE, so it works on every engine including SQLite. On SQL Server `RESTRICT` is emitted as `NO ACTION`.
+- `alterTable()` adds the column, then `ALTER TABLE ... ADD CONSTRAINT fk_<table>_<column>`. SQLite cannot do that and throws; declare the FK at `createTable()` time.
+- The column type must match the referenced column. Cortex creates `id` as INTEGER, so use `DT_INT4`; `DT_BIGINT` against it fails on MySQL/MariaDB (errno 150).
+- SQLite enforces FKs only after `Schema::enableForeignKeys($db)` on that connection.
 
 
 ## Relations

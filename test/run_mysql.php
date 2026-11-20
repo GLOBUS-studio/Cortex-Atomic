@@ -141,6 +141,13 @@ foreach ($dbs as $type => $db) {
     $results = array_merge($results, (array)$test->run($db, $type));
 }
 
+// Test Column FK (Column::references() / onDelete() in the schema builder)
+foreach ($dbs as $type => $db) {
+    $f3->set('DB', $db);
+    $test = new \Test_Column_FK();
+    $results = array_merge($results, (array)$test->run($db, $type));
+}
+
 // Test Fixes (#7-#21 regression/coverage tests)
 foreach ($dbs as $type => $db) {
     $f3->set('DB', $db);

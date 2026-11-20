@@ -55,7 +55,9 @@ abstract class TableBuilder {
 	 * @return Column
 	 */
 	public function addColumn($key,$args=NULL) {
+		$source=NULL;
 		if ($key instanceof Column) {
+			$source=$key;
 			$args=$key->getColumnArray();
 			$key=$key->name;
 		}
@@ -64,6 +66,10 @@ abstract class TableBuilder {
 		$column=new Column($key,$this);
 		if ($args)
 			$column->copyfrom($args);
+		// carry a declared foreign key over (validated setters, not copyfrom)
+		if ($source && $source->hasReference())
+			$column->references($source->refTable,$source->refColumn)
+				->onDelete($source->onDelete);
 		// skip default pkey field
 		if (count($this->pkeys)==1 && in_array($key,$this->pkeys))
 			return $column;
