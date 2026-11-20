@@ -233,31 +233,39 @@ class Column {
 	}
 
 	/**
-	 * FK clause for CREATE TABLE, e.g. ", FOREIGN KEY(`a`) REFERENCES `t`(`id`) ON DELETE RESTRICT"
+	 * constraint name used by both createTable() and alterTable():
+	 * fk_<table>_<column> (as Schema::addForeignKey), hashed when over 63 chars
+	 * @return string
+	 */
+	public function getForeignKeyName() {
+		$table=$this->table->getName();
+		$name='fk_'.$table.'_'.$this->name;
+		if (strlen($name)>63)
+			$name='fk_'.Base::instance()->hash($table.'_'.$this->name);
+		return $name;
+	}
+
+	/**
+	 * FK clause for CREATE TABLE,
+	 * e.g. ", CONSTRAINT `fk_t_a` FOREIGN KEY(`a`) REFERENCES `p`(`id`) ON DELETE RESTRICT"
 	 * @return string empty when no reference is declared
 	 */
 	public function getForeignKeyClause() {
 		if (!$this->hasReference())
 			return '';
 		return $this->schema->foreignKeyClause($this->name,$this->refTable,
-			$this->refColumn,$this->resolveOnDelete());
+			$this->refColumn,$this->resolveOnDelete(),$this->getForeignKeyName());
 	}
 
 	/**
 	 * ALTER TABLE ... ADD CONSTRAINT query for an existing table
-	 * (constraint name matches Schema::addForeignKey: fk_<table>_<column>)
 	 * @return string empty when no reference is declared
 	 */
 	public function getAddForeignKeyQuery() {
 		if (!$this->hasReference())
 			return '';
-		$table=$this->table->getName();
-		$name='fk_'.$table.'_'.$this->name;
-		if (strlen($name)>63)
-			$name='fk_'.Base::instance()->hash($table.'_'.$this->name);
-		return 'ALTER TABLE '.$this->db->quotekey($table).
-			' ADD CONSTRAINT '.$this->db->quotekey($name).' '.
-			ltrim($this->getForeignKeyClause(),', ').';';
+		return 'ALTER TABLE '.$this->db->quotekey($this->table->getName()).
+			' ADD '.ltrim($this->getForeignKeyClause(),', ').';';
 	}
 
 	/**

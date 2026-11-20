@@ -429,17 +429,20 @@ class Schema {
 	 * @param string $refTable
 	 * @param string $refColumn
 	 * @param string $onDelete
+	 * @param string|null $constraintName emit CONSTRAINT <name> when given; null keeps the unnamed form
 	 * @return string SQL fragment to append to CREATE TABLE column list
 	 */
 	public function foreignKeyClause(string $column,
 		string $refTable, string $refColumn = 'id',
-		string $onDelete = 'RESTRICT'): string
+		string $onDelete = 'RESTRICT', ?string $constraintName = null): string
 	{
 		$onDelete = strtoupper($onDelete);
 		$qc = $this->db->quotekey($column);
 		$qrt = $this->db->quotekey($refTable);
 		$qrc = $this->db->quotekey($refColumn);
-		return ", FOREIGN KEY({$qc}) REFERENCES {$qrt}({$qrc}) ON DELETE {$onDelete}";
+		$named = $constraintName === null ? ''
+			: 'CONSTRAINT '.$this->db->quotekey($constraintName).' ';
+		return ", {$named}FOREIGN KEY({$qc}) REFERENCES {$qrt}({$qrc}) ON DELETE {$onDelete}";
 	}
 
 	/**

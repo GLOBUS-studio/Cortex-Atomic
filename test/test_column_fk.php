@@ -41,6 +41,23 @@ class Test_Column_FK {
 			return false;
 		};
 
+		// live FK constraint name for table.column (MySQL/MariaDB, PostgreSQL)
+		$fkName = function(string $table, string $column) use ($db, $driver) {
+			if (str_contains($driver, 'mysql'))
+				$r = $db->exec('SELECT CONSTRAINT_NAME AS n FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE '.
+					'WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? '.
+					'AND REFERENCED_TABLE_NAME IS NOT NULL', [$table, $column]);
+			elseif (str_contains($driver, 'pgsql'))
+				$r = $db->exec("SELECT tc.constraint_name AS n FROM information_schema.table_constraints tc ".
+					"JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name ".
+					"AND tc.table_name = kcu.table_name ".
+					"WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_name = ? AND kcu.column_name = ?",
+					[$table, $column]);
+			else
+				return null;
+			return array_column($r, 'n');
+		};
+
 		$parent = $schema->createTable('fkc_parent');
 		$parent->addColumn('name')->type($VARCHAR);
 		$parent->build();
@@ -53,7 +70,7 @@ class Test_Column_FK {
 			->references('fkc_parent')->onDelete('cascade');
 		$t->addColumn('title')->type($VARCHAR);
 		$sql = $t->build(false)[0];
-		$fk = 'FOREIGN KEY('.$q('author_id').') REFERENCES '.$q('fkc_parent').'('.$q('id').') ON DELETE CASCADE';
+		$fk = 'CONSTRAINT '.$q('fk_fkc_cascade_author_id').' FOREIGN KEY('.$q('author_id').') REFERENCES '.$q('fkc_parent').'('.$q('id').') ON DELETE CASCADE';
 		$test->expect(
 			str_contains($sql, $fk),
 			$type.': createTable emits inline FK with default ref column id and normalized CASCADE'
@@ -63,9 +80,9 @@ class Test_Column_FK {
 			$type.': FK clause comes after all column definitions'
 		);
 		$expected = [
-			'sqlite' => 'CREATE TABLE `fkc_cascade` (`id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, `author_id` integer(11) NOT NULL, `title` varchar(128) NULL, FOREIGN KEY(`author_id`) REFERENCES `fkc_parent`(`id`) ON DELETE CASCADE);',
-			'mysql' => 'CREATE TABLE `fkc_cascade` (`id` INTEGER NOT NULL PRIMARY KEY AUTO_INCREMENT, `author_id` int(11) NOT NULL, `title` varchar(128) NULL, FOREIGN KEY(`author_id`) REFERENCES `fkc_parent`(`id`) ON DELETE CASCADE) DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci;',
-			'pgsql' => 'CREATE TABLE "fkc_cascade" ("id" SERIAL PRIMARY KEY, "author_id" integer NOT NULL, "title" character varying(128) NULL, FOREIGN KEY("author_id") REFERENCES "fkc_parent"("id") ON DELETE CASCADE);',
+			'sqlite' => 'CREATE TABLE `fkc_cascade` (`id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, `author_id` integer(11) NOT NULL, `title` varchar(128) NULL, CONSTRAINT `fk_fkc_cascade_author_id` FOREIGN KEY(`author_id`) REFERENCES `fkc_parent`(`id`) ON DELETE CASCADE);',
+			'mysql' => 'CREATE TABLE `fkc_cascade` (`id` INTEGER NOT NULL PRIMARY KEY AUTO_INCREMENT, `author_id` int(11) NOT NULL, `title` varchar(128) NULL, CONSTRAINT `fk_fkc_cascade_author_id` FOREIGN KEY(`author_id`) REFERENCES `fkc_parent`(`id`) ON DELETE CASCADE) DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci;',
+			'pgsql' => 'CREATE TABLE "fkc_cascade" ("id" SERIAL PRIMARY KEY, "author_id" integer NOT NULL, "title" character varying(128) NULL, CONSTRAINT "fk_fkc_cascade_author_id" FOREIGN KEY("author_id") REFERENCES "fkc_parent"("id") ON DELETE CASCADE);',
 		];
 		foreach ($expected as $drv => $exp)
 			if (str_contains($driver, $drv))
@@ -106,6 +123,11 @@ class Test_Column_FK {
 			$schema->hasForeignKey('fkc_cascade', 'author_id'),
 			$type.': built table has the FK constraint'
 		);
+		if (!$isSqlite)
+			$test->expect(
+				$fkName('fkc_cascade', 'author_id') === ['fk_fkc_cascade_author_id'],
+				$type.': createTable FK is named fk_<table>_<column> in the catalog'
+			);
 		$db->exec('INSERT INTO '.$q('fkc_parent').' ('.$q('name').') VALUES (?)', ['p1']);
 		$pid = (int)$db->exec('SELECT MAX('.$q('id').') AS m FROM '.$q('fkc_parent'))[0]['m'];
 		$db->exec('INSERT INTO '.$q('fkc_cascade').' ('.$q('author_id').') VALUES (?)', [$pid]);
@@ -177,10 +199,39 @@ class Test_Column_FK {
 				$type.': alterTable adds the column and the FK'
 			);
 			$test->expect(
+				$fkName('fkc_alter', 'author_id') === ['fk_fkc_alter_author_id'],
+				$type.': alterTable FK is named fk_<table>_<column> in the catalog'
+			);
+			$test->expect(
 				$fails(fn() => $db->exec('INSERT INTO '.$q('fkc_alter').' ('.$q('author_id').') VALUES (?)', [99999])),
 				$type.': altered table rejects orphan rows'
 			);
 		}
+
+		// create and alter paths name the same table/column identically, incl. hashed long names
+		$long = str_repeat('l', 40);
+		foreach ([['fkc_alter', 'author_id'], ['fkc_alter', $long], [$long, $long]] as [$tn, $cn]) {
+			$created = $schema->createTable($tn)->addColumn($cn)->type($INT)
+				->references('fkc_parent')->getForeignKeyName();
+			$altered = $schema->alterTable($tn)->addColumn($cn)->type($INT)
+				->references('fkc_parent')->getForeignKeyName();
+			$test->expect(
+				$created === $altered && strlen($created) <= 63
+				&& ($tn !== 'fkc_alter' || $cn !== 'author_id' || $created === 'fk_fkc_alter_author_id'),
+				$type.': create/alter FK name match for '.strlen($tn).'+'.strlen($cn).' chars ('.$created.')'
+			);
+		}
+		$t = $schema->createTable('fkc_alter');
+		$t->addColumn('author_id')->type($INT)->references('fkc_parent');
+		$test->expect(
+			str_contains($t->build(false)[0], 'CONSTRAINT '.$q('fk_fkc_alter_author_id').' FOREIGN KEY'),
+			$type.': createTable SQL uses the same name as the alterTable constraint'
+		);
+		$test->expect(
+			$schema->foreignKeyClause('a_id', 'tbl_a', 'id', 'CASCADE')
+				=== ', FOREIGN KEY('.$q('a_id').') REFERENCES '.$q('tbl_a').'('.$q('id').') ON DELETE CASCADE',
+			$type.': Schema::foreignKeyClause() stays unnamed by default (pivot tables)'
+		);
 
 		// ================================================================
 		// 4. Validation errors
@@ -248,8 +299,8 @@ class Test_Column_FK {
 			$sql = $t->build(false)[0];
 			$test->expect(
 				$sql === 'CREATE TABLE [posts] ([id] INT IDENTITY CONSTRAINT PK_posts_ID PRIMARY KEY, [author_id] int NOT NULL, [editor_id] int NULL, '.
-					'FOREIGN KEY([author_id]) REFERENCES [users]([id]) ON DELETE NO ACTION, '.
-					'FOREIGN KEY([editor_id]) REFERENCES [users]([id]) ON DELETE SET NULL);',
+					'CONSTRAINT [fk_posts_author_id] FOREIGN KEY([author_id]) REFERENCES [users]([id]) ON DELETE NO ACTION, '.
+					'CONSTRAINT [fk_posts_editor_id] FOREIGN KEY([editor_id]) REFERENCES [users]([id]) ON DELETE SET NULL);',
 				$type.': sqlsrv CREATE TABLE maps RESTRICT to NO ACTION ('.$sql.')'
 			);
 		}

@@ -404,6 +404,7 @@ $table->build();
 - `references(string $table, string $column = 'id')` takes the real table name; no prefix is added.
 - `onDelete()` accepts `CASCADE`, `RESTRICT`, `SET NULL`, `NO ACTION` (case-insensitive). Anything else, `onDelete()` before `references()`, `SET NULL` on a NOT NULL column, or empty names throw.
 - `createTable()` emits the FK inside CREATE TABLE, so it works on every engine including SQLite. On SQL Server `RESTRICT` is emitted as `NO ACTION`.
+- Both paths name the constraint `fk_<table>_<column>` (hashed when longer than 63 chars), so later migrations can drop or check it by one name.
 - `alterTable()` adds the column, then `ALTER TABLE ... ADD CONSTRAINT fk_<table>_<column>`. SQLite cannot do that and throws; declare the FK at `createTable()` time.
 - The column type must match the referenced column. Cortex creates `id` as INTEGER, so use `DT_INT4`; `DT_BIGINT` against it fails on MySQL/MariaDB (errno 150).
 - SQLite enforces FKs only after `Schema::enableForeignKeys($db)` on that connection.
